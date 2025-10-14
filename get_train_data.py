@@ -4,14 +4,14 @@ import sys
 from itertools import zip_longest
 
 from playwright.sync_api import sync_playwright
-from lxml import html as lxml_html
+from requests_html import HTML
 
 from get_delays import get_delays
 from logger_config import setup_logging
 
 
 def get_train_data(date: str, logger) -> list:
-    """Pobiera dane o frekwencji pociągów ze strony intercity.pl przy użyciu Playwright."""
+    """Pobiera dane o numerach wszystkich pociągów oraz ich frekwencji pociągów ze strony intercity.pl"""
     logger.info(f"Rozpoczęto pobieranie podstawowych danych o pociągach na dzień: {date}")
 
     data = []
@@ -32,8 +32,8 @@ def get_train_data(date: str, logger) -> list:
 
                 html_content = page.content()
 
-                tree = lxml_html.fromstring(html_content)
-                table = tree.find(".//table")
+                html = HTML(html=html_content)
+                table = html.find("table", first=True)
 
                 if not table:
                     logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
@@ -76,7 +76,6 @@ def get_train_data(date: str, logger) -> list:
 
 
 if __name__ == "__main__":
-    # 1. Konfiguracja loggera
     logger = setup_logging()
 
     logger.info("=" * 50)
@@ -84,7 +83,6 @@ if __name__ == "__main__":
     logger.info("=" * 50)
 
 
-    # 2. Pobranie danych podstawowych
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     train_data_wo_delays = get_train_data(today, logger)
 
@@ -92,11 +90,9 @@ if __name__ == "__main__":
         logger.warning("Nie udało się pobrać żadnych danych o pociągach. Zamykanie aplikacji.")
         sys.exit(0)
 
-    # 3. Pobranie informacji o opóźnieniach
     logger.info("Rozpoczęto proces pobierania informacji o opóźnieniach...")
     data_with_delays = get_delays(train_data_wo_delays, logger)
 
-    # 4. Zapis wyników do pliku JSON
     now_str = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
     output_filename = f"train_data_{now_str}.json"
     logger.info(f"Zapisywanie wszystkich danych do pliku: {output_filename}")
