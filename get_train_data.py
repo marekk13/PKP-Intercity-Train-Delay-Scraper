@@ -4,7 +4,7 @@ import sys
 from itertools import zip_longest
 
 from playwright.sync_api import sync_playwright
-from requests_html import HTML  # Użyjemy tylko parsera z requests-html
+from lxml import html as lxml_html
 
 from get_delays import get_delays
 from logger_config import setup_logging
@@ -28,15 +28,12 @@ def get_train_data(date: str, logger) -> list:
 
                 page.goto(url, wait_until='domcontentloaded', timeout=30000)
 
-                # Czekaj na pojawienie się tabeli, maksymalnie 10 sekund
                 page.wait_for_selector("table", timeout=10000)
 
-                # Pobierz zawartość HTML po wykonaniu JavaScriptu
                 html_content = page.content()
 
-                # Użyj parsera HTML z requests-html na gotowej treści
-                html = HTML(html=html_content)
-                table = html.find("table", first=True)
+                tree = lxml_html.fromstring(html_content)
+                table = tree.find(".//table")
 
                 if not table:
                     logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
@@ -54,7 +51,6 @@ def get_train_data(date: str, logger) -> list:
                 data.append(page_data)
                 i += 1
             except Exception as e:
-                # Obsługa timeoutu z Playwright i innych błędów
                 if "Timeout" in str(e):
                     logger.info(f"Nie znaleziono tabeli na stronie {i} w zadanym czasie. Zakończono pobieranie.")
                 else:
