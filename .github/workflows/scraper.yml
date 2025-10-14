@@ -2,7 +2,7 @@ name: Scrape Train Delays using Docker
 
 on:
   schedule:
-    - cron: '0 23:30 * * *'
+    - cron: '40 23 * * *'
   workflow_dispatch:
 
 jobs:
