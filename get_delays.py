@@ -2,7 +2,6 @@ import re
 import time
 import logging
 
-from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -31,13 +30,11 @@ def parse_distance_and_time_info(info_text: str) -> tuple:
     distance_km = None
     travel_time = None
 
-    # Przetwarzaj dystans
     if len(parts) > 1:
         distance_match = re.search(r'([\d,\.]+)\s*km', parts[1])
         if distance_match:
             distance_km = float(distance_match.group(1).replace(',', '.'))
 
-    # Przetwarzaj czas przejazdu
     if len(parts) > 3:
         time_match = re.search(r'(\d+h:\d+min)', parts[3])
         if time_match:
@@ -58,12 +55,12 @@ def get_train_details(driver, wait, train_number, logger):
     """Pobiera szczegółowe dane o trasie pociągu."""
     logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
-    # 1. Wpisz numer pociągu
+    # 1. numer pociągu
     input_box = wait.until(EC.element_to_be_clickable((By.ID, "ftn-number")))
     input_box.clear()
     input_box.send_keys(train_number)
 
-    # 2. Klikamy „Szukaj”
+    # 2. klikamy „Szukaj”
     search_button = wait.until(EC.element_to_be_clickable((By.ID, "ftn-search")))
     search_button.click()
 
@@ -201,6 +198,38 @@ def get_train_details(driver, wait, train_number, logger):
     return route_details
 
 
+def process_single_train(driver, wait, train: dict, logger):
+    """
+    Pobiera i parsuje dane dla pojedynczego pociągu.
+    """
+    train_number = train.get("number")
+    if not train_number:
+        logger.warning("Pominięto pociąg bez numeru w danych wejściowych.")
+        return
+
+    try:
+        driver.get(URL)
+
+        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "span.find-train-selector"))).click()
+
+        li_element = wait.until(EC.visibility_of_element_located((By.XPATH, "//li[normalize-space()='po numerze']")))
+        driver.execute_script("arguments[0].click();", li_element)
+
+        # Pobranie szczegółów
+        details = get_train_details(driver, wait, train_number, logger)
+        train["delay_info"] = details
+
+    except TimeoutException as e:
+        logger.error(f"Timeout podczas przetwarzania pociągu {train_number}. Pomijanie. Błąd: {e}")
+        train["delay_info"] = "scraping_timeout"
+    except WebDriverException as e:
+        logger.error(f"Błąd WebDrivera podczas przetwarzania pociągu {train_number}. Pomijanie. Błąd: {e.msg}")
+        train["delay_info"] = "scraping_error"
+    except Exception as e:
+        logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number}. Pomijanie. Błąd: {e}")
+        train["delay_info"] = "unknown_error"
+
+
 def get_delays(trains_data: list = None, logger=None) -> list:
     if logger is None:
         logger = logging.getLogger(__name__)
@@ -209,36 +238,41 @@ def get_delays(trains_data: list = None, logger=None) -> list:
     opts = Options()
     opts.add_argument("--headless=new")
     opts.add_argument("--window-size=1920,1080")
-    driver = webdriver.Chrome(options=opts)
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+
+    try:
+        driver = webdriver.Remote(
+            command_executor='http://localhost:4444/wd/hub',
+            options=opts
+        )
+        logger.info("Pomyślnie połączono z serwerem Selenium w kontenerze Docker.")
+    except Exception as e:
+        logger.critical(f"Nie udało się połączyć z serwerem Selenium. Błąd: {e}")
+        for train in trains_data:
+            train["delay_info"] = "selenium_connection_error"
+        return trains_data
+
     wait = WebDriverWait(driver, 15)
 
     try:
         driver.get(URL)
-        # Akceptacja cookies
         try:
-            wait.until(EC.element_to_be_clickable(
+            # kliknięcie cookies na początku
+            cookie_button = wait.until(EC.element_to_be_clickable(
                 (By.XPATH, "//button[contains(.,'Akceptuj') or contains(.,'Zgoda')]"))
-            ).click()
+            )
+            cookie_button.click()
             logger.info("Zaakceptowano cookies.")
         except TimeoutException:
             logger.warning("Banner cookies nie pojawił się lub nie można było go kliknąć.")
 
-        # Przetwarzanie każdego pociągu
         for train in trains_data:
-            train_number = train.get("number")
-            if not train_number:
-                logger.warning("Pominięto pociąg bez numeru w danych wejściowych.")
-                continue
+            process_single_train(driver, wait, train, logger)
 
-            # Wybranie pociągu po numerze
-            driver.get(URL)
-            wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "span.find-train-selector"))).click()
-            wait.until(EC.element_to_be_clickable((By.XPATH, "//li[normalize-space()='po numerze']"))).click()
-
-            details = get_train_details(driver, wait, train_number, logger)
-            train["delay_info"] = details
     except WebDriverException as e:
-        logger.error(f"Błąd WebDrivera\n{e}")
+        logger.critical(f"Krytyczny błąd WebDrivera, proces zostanie przerwany. Błąd: {e.msg}")
     finally:
         driver.quit()
         logger.info("Zakończono działanie przeglądarki Selenium.")

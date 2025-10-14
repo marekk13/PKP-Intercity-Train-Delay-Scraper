@@ -1,0 +1,36 @@
+name: Scrape Train Delays using Docker
+
+on:
+  schedule:
+    - cron: '0 23:30 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and run Docker container
+        run: |
+          docker build -t train-scraper .
+          docker run --name scraper-container train-scraper
+
+      - name: Copy results from container
+        run: |
+          if [ $(docker ps -a -q -f name=scraper-container) ]; then
+            docker cp scraper-container:/app/train_data_*.json .
+            docker cp scraper-container:/app/scraper_log_*.log .
+          else
+            echo "Container did not run or was removed. No files to copy."
+          fi
+
+      - name: Commit and push if it changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(data): Automatyczne dodanie danych o pociągach"
+          file_pattern: "*.json *.log"

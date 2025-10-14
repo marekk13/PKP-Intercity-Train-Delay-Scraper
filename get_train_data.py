@@ -1,57 +1,67 @@
 import datetime
 import json
-import requests
 import sys
 from itertools import zip_longest
 
-from requests_html import HTMLSession
-from requests.models import MissingSchema
+from playwright.sync_api import sync_playwright
+from requests_html import HTML  # Użyjemy tylko parsera z requests-html
 
 from get_delays import get_delays
 from logger_config import setup_logging
 
 
 def get_train_data(date: str, logger) -> list:
-    """Pobiera dane o frekwencji pociągów ze strony intercity.pl."""
+    """Pobiera dane o frekwencji pociągów ze strony intercity.pl przy użyciu Playwright."""
     logger.info(f"Rozpoczęto pobieranie podstawowych danych o pociągach na dzień: {date}")
-    s = HTMLSession()
-    i = 1
+
     data = []
+    i = 1
 
-    while True:
-        try:
-            url = f"https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html?location=&date={date}&category%5Beic_premium%5D=eip&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={i}"
-            logger.info(f"Pobieranie danych ze strony {i}: {url}")
-            r = s.get(url)
-            r.raise_for_status()  # Sprawdza czy status to 2xx
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
 
-            table = r.html.find("table")
-            if not table:
-                logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
+        while True:
+            try:
+                url = f"https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html?location=&date={date}&category%5Beic_premium%5D=eip&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={i}"
+                logger.info(f"Pobieranie danych ze strony {i}: {url}")
+
+                page.goto(url, wait_until='domcontentloaded', timeout=30000)
+
+                # Czekaj na pojawienie się tabeli, maksymalnie 10 sekund
+                page.wait_for_selector("table", timeout=10000)
+
+                # Pobierz zawartość HTML po wykonaniu JavaScriptu
+                html_content = page.content()
+
+                # Użyj parsera HTML z requests-html na gotowej treści
+                html = HTML(html=html_content)
+                table = html.find("table", first=True)
+
+                if not table:
+                    logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
+                    break
+
+                page_data = [
+                    [d.text for d in row.find("td")[:5] + row.find("td")[6:]]
+                    for row in table.find("tr")[1:]
+                ]
+
+                if not page_data:
+                    logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
+                    break
+
+                data.append(page_data)
+                i += 1
+            except Exception as e:
+                # Obsługa timeoutu z Playwright i innych błędów
+                if "Timeout" in str(e):
+                    logger.info(f"Nie znaleziono tabeli na stronie {i} w zadanym czasie. Zakończono pobieranie.")
+                else:
+                    logger.error(f"Wystąpił błąd na stronie {i}: {e}")
                 break
 
-            table = table[0]
-
-            page_data = [
-                [d.text for d in row.find("td")[:5] + row.find("td")[6:]]
-                for row in table.find("tr")[1:]
-            ]
-
-            if not page_data:
-                logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
-                break
-
-            data.append(page_data)
-            i += 1
-        except IndexError:
-            logger.info("Zakończono pobieranie danych z Intercity.pl - brak kolejnych stron.")
-            break
-        except MissingSchema:
-            logger.critical(f"Nieprawidłowy URL: {url}. Zamykanie aplikacji.")
-            sys.exit("Invalid URL provided (get_train_data)")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Błąd połączenia podczas pobierania strony {i}: {e}")
-            break
+        browser.close()
 
     headers_data = [
         "domestic", "number", "category", "name", "from", "to",
