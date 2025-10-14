@@ -3,12 +3,10 @@ import json
 import sys
 from itertools import zip_longest
 
-from playwright.sync_api import sync_playwright
-from requests_html import HTML
+from requests_html import HTMLSession
 
 from get_delays import get_delays
 from logger_config import setup_logging
-
 
 def get_train_data(date: str, logger) -> list:
     """Pobiera dane o numerach wszystkich pociągów oraz ich frekwencji pociągów ze strony intercity.pl"""
@@ -17,47 +15,41 @@ def get_train_data(date: str, logger) -> list:
     data = []
     i = 1
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
+    session = HTMLSession()
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    })
 
-        while True:
-            try:
-                url = f"https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html?location=&date={date}&category%5Beic_premium%5D=eip&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={i}"
-                logger.info(f"Pobieranie danych ze strony {i}: {url}")
+    while True:
+        try:
+            url = f"https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html?location=&date={date}&category%5Beic_premium%5D=eip&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={i}"
+            logger.info(f"Pobieranie danych ze strony {i}: {url}")
 
-                page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            response = session.get(url, timeout=30)
 
-                page.wait_for_selector("table", timeout=10000)
+            response.raise_for_status()
 
-                html_content = page.content()
+            html = response.html
+            table = html.find("table", first=True)
 
-                html = HTML(html=html_content)
-                table = html.find("table", first=True)
-
-                if not table:
-                    logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
-                    break
-
-                page_data = [
-                    [d.text for d in row.find("td")[:5] + row.find("td")[6:]]
-                    for row in table.find("tr")[1:]
-                ]
-
-                if not page_data:
-                    logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
-                    break
-
-                data.append(page_data)
-                i += 1
-            except Exception as e:
-                if "Timeout" in str(e):
-                    logger.info(f"Nie znaleziono tabeli na stronie {i} w zadanym czasie. Zakończono pobieranie.")
-                else:
-                    logger.error(f"Wystąpił błąd na stronie {i}: {e}")
+            if not table:
+                logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
                 break
 
-        browser.close()
+            page_data = [
+                [d.text for d in row.find("td")[:5] + row.find("td")[6:]]
+                for row in table.find("tr")[1:]
+            ]
+
+            if not page_data:
+                logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
+                break
+
+            data.append(page_data)
+            i += 1
+        except Exception as e:
+            logger.error(f"Wystąpił błąd na stronie {i}: {e}")
+            break
 
     headers_data = [
         "domestic", "number", "category", "name", "from", "to",
@@ -65,7 +57,7 @@ def get_train_data(date: str, logger) -> list:
     ]
 
     res = []
-    for page_index, page in enumerate(data):
+    for page in data:
         for train in page:
             train_dict = dict(zip_longest(headers_data, train, fillvalue="n/a"))
             train_dict["date"] = date
