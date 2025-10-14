@@ -1,4 +1,4 @@
-name: Scrape Train Delays using Docker
+name: Scrape Train Delays
 
 on:
   schedule:
@@ -18,7 +18,11 @@ jobs:
       - name: Build and run Docker container
         run: |
           docker build -t train-scraper .
-          docker run --name scraper-container train-scraper
+          docker run --name scraper-container --shm-size="2g" train-scraper || true
+
+      - name: Display logs from container
+        run: |
+          docker logs scraper-container
 
       - name: Copy results from container
         run: |
