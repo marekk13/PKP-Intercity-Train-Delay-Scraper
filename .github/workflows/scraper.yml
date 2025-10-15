@@ -12,17 +12,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build and run Docker container
         run: |
           docker build -t train-scraper .
           docker run --name scraper-container --shm-size="2g" train-scraper || true
 
       - name: Display logs from container
-        run: |
-          docker logs scraper-container
+        run: docker logs scraper-container
 
       - name: Copy results from container
         run: |
