@@ -72,10 +72,8 @@ def get_train_data(date: str, logger) -> list:
     page_num = 1
     max_retries = 3
 
-    # przygotuj opcje Chromedriver (w obrazie selenium/standalone-chrome chromedriver jest dostępny)
     opts = Options()
-    # jeżeli headless wykrywa się łatwiej, możesz zmienić na "--headless=chrome" lub usunąć headsless
-    opts.add_argument("--headless=new")
+    # opts.add_argument("--headless=chrome")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--lang=pl-PL")
@@ -127,21 +125,16 @@ def get_train_data(date: str, logger) -> list:
 
                 try:
                     driver.get(url)
-                    # human-like actions przed czekaniem
                     human_like_actions(driver)
 
-                    # czekaj aż tabela się pojawi (jeśli w ciągu 12s nie ma, traktujemy jako brak)
                     wait = WebDriverWait(driver, 12)
                     wait.until(EC.presence_of_element_located((By.TAG_NAME, "table")))
-                    # jeśli doszedł tu kod -> tabela jest obecna
                     success = True
                     logger.info(f"Znaleziono element <table> na stronie {page_num}.")
                     break
                 except TimeoutException:
                     logger.warning(f"Timeout czekania na tabelę (próba {attempt}/{max_retries}).")
-                    # zapisz snapshot html do pliku dla debugu
                     save_debug_html(driver, f"page_{page_num}_timeout_attempt{attempt}", logger)
-                    # czekaj losowo przed retry
                     time.sleep(1 + random.uniform(0.5, 2.0))
                 except WebDriverException as e:
                     logger.warning(f"Selenium error (próba {attempt}/{max_retries}): {e}")
@@ -153,7 +146,6 @@ def get_train_data(date: str, logger) -> list:
                 save_debug_html(driver, f"page_{page_num}_failed_final", logger)
                 break
 
-            # parsowanie tabeli
             try:
                 table = driver.find_element(By.TAG_NAME, "table")
                 rows = table.find_elements(By.TAG_NAME, "tr")[1:]
@@ -162,7 +154,6 @@ def get_train_data(date: str, logger) -> list:
                     cells = row.find_elements(By.TAG_NAME, "td")
                     if not cells:
                         continue
-                    # komórki: weź 0..4 oraz 6..end (pomiń 5-tej)
                     left = [c.text for c in cells[:5]]
                     right = [c.text for c in cells[6:]] if len(cells) > 6 else []
                     page_data.append(left + right)
@@ -179,7 +170,6 @@ def get_train_data(date: str, logger) -> list:
             data.append(page_data)
             page_num += 1
 
-            # krótki human-like delay przed kolejną stroną
             time.sleep(random.uniform(0.6, 1.8))
 
     finally:
@@ -188,7 +178,6 @@ def get_train_data(date: str, logger) -> list:
         except Exception:
             pass
 
-    # spłaszcz dane
     headers = ["domestic", "number", "category", "name", "from", "to", "occupancy", "delay_info", "date"]
     res = []
     for page in data:
