@@ -249,6 +249,12 @@ def get_delays(trains_data: list = None, logger=None) -> list:
     opts.add_argument('--disable-blink-features=AutomationControlled')
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option('useAutomationExtension', False)
+    opts.add_argument("--disable-infobars")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--profile-directory=Default")
+    opts.add_argument("--incognito")
+    opts.add_argument("--disable-plugins-discovery")
+    opts.add_argument("--start-maximized")
 
     try:
         driver = webdriver.Remote(
