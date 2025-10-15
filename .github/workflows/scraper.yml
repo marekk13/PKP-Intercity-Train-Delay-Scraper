@@ -12,25 +12,34 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build and run Docker container
+      - name: Build Docker image
+        run: docker build -t train-scraper .
+
+      - name: Run scraper container (allow failure)
         run: |
-          docker build -t train-scraper .
           docker run --name scraper-container --shm-size="2g" train-scraper || true
 
-      - name: Display logs from container
-        run: docker logs scraper-container
+      - name: Show container logs
+        run: docker logs scraper-container || true
 
-      - name: Copy results from container
+      - name: Copy outputs from container
         run: |
-          if [ $(docker ps -a -q -f name=scraper-container) ]; then
-            docker cp scraper-container:/app/train_data_*.json .
-            docker cp scraper-container:/app/scraper_log_*.log .
+          mkdir -p outputs || true
+          if [ -d outputs ]; then rm -rf outputs/* || true; fi
+          if [ "$(docker ps -a -q -f name=scraper-container)" ]; then
+            docker cp scraper-container:/app/outputs ./outputs || true
+            docker cp scraper-container:/app/train_data_*.json ./outputs || true
+            docker cp scraper-container:/app/*.log ./outputs || true
           else
-            echo "Container did not run or was removed. No files to copy."
+            echo "Container not found; nothing to copy."
           fi
 
-      - name: Commit and push if it changed
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Upload debug artifacts
+        uses: actions/upload-artifact@v4
         with:
-          commit_message: "feat(data): Automatyczne dodanie danych o pociągach"
-          file_pattern: "*.json *.log"
+          name: scraper-debug
+          path: outputs/**
+
+      - name: Cleanup container
+        run: |
+          docker rm -f scraper-container || true
