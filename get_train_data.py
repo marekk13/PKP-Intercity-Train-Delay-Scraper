@@ -57,9 +57,11 @@ def get_train_data(date: str, logger) -> list:
                     if status == 200:
                         break
                     elif status == 403:
+                        # łagodny backoff + losowy sleep
                         backoff = (2 ** attempt) + random.uniform(0.5, 2.0)
                         logger.warning(f"403 z serwera (próba {attempt}/{max_retries}). Odsypiam {backoff:.1f}s")
                         time.sleep(backoff)
+                        # zmień UA i retry
                         headers["User-Agent"] = random.choice(USER_AGENTS)
                         continue
                     else:
@@ -127,3 +129,38 @@ def get_train_data(date: str, logger) -> list:
 
     logger.info(f"Pobrano podstawowe dane dla {len(res)} pociągów.")
     return res
+
+
+
+if __name__ == "__main__":
+    logger = setup_logging()
+
+    logger.info("=" * 50)
+    logger.info("ROZPOCZĘTO NOWY PROCES SCRAPOWANIA DANYCH O POCIĄGACH")
+    logger.info("=" * 50)
+
+
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    train_data_wo_delays = get_train_data(today, logger)
+
+    if not train_data_wo_delays:
+        logger.warning("Nie udało się pobrać żadnych danych o pociągach. Zamykanie aplikacji.")
+        sys.exit(0)
+
+    logger.info("Rozpoczęto proces pobierania informacji o opóźnieniach...")
+    data_with_delays = get_delays(train_data_wo_delays, logger)
+
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
+    output_filename = f"train_data_{now_str}.json"
+    logger.info(f"Zapisywanie wszystkich danych do pliku: {output_filename}")
+
+    try:
+        with open(output_filename, "w", encoding="utf-8-sig") as f:
+            json.dump(data_with_delays, f, ensure_ascii=False, indent=4)
+        logger.info("Zapisywanie danych do pliku JSON zakończone pomyślnie.")
+    except IOError as e:
+        logger.critical(f"Nie udało się zapisać pliku JSON: {e}")
+
+    logger.info("=" * 50)
+    logger.info("PROCES SCRAPOWANIA ZAKOŃCZONY")
+    logger.info("=" * 50)
