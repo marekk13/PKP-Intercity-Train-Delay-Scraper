@@ -1,23 +1,23 @@
-# zamień zawartość funkcji get_train_data na to
 import datetime
 import json
 import sys
 import time
 import random
+import traceback
 from itertools import zip_longest
 from requests_html import HTMLSession
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.remote.remote_connection import RemoteConnection
+from selenium.common.exceptions import WebDriverException
 
 from get_delays import get_delays
 from logger_config import setup_logging
 
 USER_AGENTS = [
-    # krótka lista, możesz dorzucić więcej
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
 def get_train_data(date: str, logger) -> list:
@@ -25,12 +25,10 @@ def get_train_data(date: str, logger) -> list:
 
     data = []
     i = 1
-
     session = HTMLSession()
 
-    # bazowe nagłówki "ludzkie"
     base_headers = {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
         "Connection": "keep-alive",
         "Referer": "https://www.google.com/",
@@ -40,80 +38,115 @@ def get_train_data(date: str, logger) -> list:
     max_retries = 4
 
     while True:
+        url = (
+            "https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html"
+            f"?location=&date={date}&category%5Beic_premium%5D=eip"
+            "&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk"
+            f"&page={i}"
+        )
+        logger.info(f"Pobieranie danych ze strony {i}: {url}")
+
+        headers = base_headers.copy()
+        headers["User-Agent"] = random.choice(USER_AGENTS)
+
+        response = None
+        success = False
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = session.get(url, headers=headers, timeout=30)
+                status = response.status_code
+
+                if status == 200:
+                    success = True
+                    break
+
+                # Obsługa 403 — często blokada botów
+                elif status == 403:
+                    snippet = response.text[:400].replace("\n", " ")
+                    logger.warning(
+                        f"403 Forbidden (próba {attempt}/{max_retries}) — UA={headers['User-Agent']}. "
+                        f"Fragment odpowiedzi: {snippet!r}"
+                    )
+                    backoff = (2 ** attempt) + random.uniform(0.5, 2.0)
+                    logger.info(f"Odsypiam {backoff:.1f}s i zmieniam User-Agent.")
+                    headers["User-Agent"] = random.choice(USER_AGENTS)
+                    time.sleep(backoff)
+                    continue
+
+                else:
+                    logger.warning(f"HTTP {status} ({response.reason}) przy próbie {attempt}/{max_retries}")
+                    snippet = response.text[:400].replace("\n", " ")
+                    logger.debug(f"Odpowiedź: {snippet!r}")
+                    time.sleep(random.uniform(1, 2))
+
+            except Exception as e:
+                logger.warning(f"Błąd sieciowy (próba {attempt}/{max_retries}): {e}")
+                logger.debug(traceback.format_exc())
+                time.sleep(1.5 + random.uniform(0, 2))
+
+        # Jeśli wszystkie próby zawiodły — Selenium fallback
+        if not success:
+            logger.warning("Wszystkie próby HTTP nieudane — próbuję fallback: Selenium (jeśli dostępny).")
+            try:
+                opts = Options()
+                opts.add_argument("--headless=new")
+                opts.add_argument("--no-sandbox")
+                opts.add_argument("--disable-dev-shm-usage")
+                opts.add_argument("--lang=pl-PL")
+                opts.add_argument("--user-agent=" + random.choice(USER_AGENTS))
+
+                driver = webdriver.Remote(
+                    command_executor="http://localhost:4444/wd/hub",
+                    options=opts
+                )
+                driver.get(url)
+                page_source = driver.page_source
+                html = session.html_class(page_source)
+                driver.quit()
+                logger.info("Fallback Selenium zakończony sukcesem.")
+            except WebDriverException as se:
+                logger.error(f"Nie udało się połączyć z Selenium Remote: {se}")
+                logger.debug(traceback.format_exc())
+                raise RuntimeError("Nie udało się pobrać strony Intercity — Selenium niedostępne.")
+            except Exception as se:
+                logger.error(f"Fallback Selenium również nie powiódł się: {se}")
+                logger.debug(traceback.format_exc())
+                raise RuntimeError("Nie udało się pobrać strony Intercity (403 i Selenium fallback nieudany).")
+        else:
+            html = response.html
+
         try:
-            url = f"https://www.intercity.pl/pl/site/dla-pasazera/informacje/frekwencja.html?location=&date={date}&category%5Beic_premium%5D=eip&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={i}"
-            logger.info(f"Pobieranie danych ze strony {i}: {url}")
-
-            # rotuj UA
-            headers = base_headers.copy()
-            headers["User-Agent"] = random.choice(USER_AGENTS)
-
-            attempt = 0
-            while attempt < max_retries:
-                attempt += 1
-                try:
-                    response = session.get(url, headers=headers, timeout=30)
-                    status = response.status_code
-                    if status == 200:
-                        break
-                    elif status == 403:
-                        # łagodny backoff + losowy sleep
-                        backoff = (2 ** attempt) + random.uniform(0.5, 2.0)
-                        logger.warning(f"403 z serwera (próba {attempt}/{max_retries}). Odsypiam {backoff:.1f}s")
-                        time.sleep(backoff)
-                        # zmień UA i retry
-                        headers["User-Agent"] = random.choice(USER_AGENTS)
-                        continue
-                    else:
-                        response.raise_for_status()
-                except Exception as e:
-                    logger.warning(f"Błąd sieciowy przy pobieraniu strony {i}, próba {attempt}: {e}")
-                    time.sleep(1 + random.uniform(0, 1.5))
-            else:
-                # wszystkie retry nieudane -> spróbuj fallback na Selenium (jeśli dostępny)
-                logger.warning("Wszystkie próby HTTP nieudane — próbuję fallback: Selenium (jeśli dostępny).")
-                try:
-                    # Próba pobrania przez Selenium Remote (jeśli masz serwer Selenium)
-                    opts = Options()
-                    opts.add_argument("--headless=new")
-                    opts.add_argument("--no-sandbox")
-                    opts.add_argument("--disable-dev-shm-usage")
-                    opts.add_argument("--lang=pl-PL")
-                    driver = webdriver.Remote(command_executor='http://localhost:4444/wd/hub', options=opts)
-                    driver.get(url)
-                    page_source = driver.page_source
-                    driver.quit()
-                    html = session.html_class(page_source)  # requests_html HTML z surowym source
-                except Exception as se:
-                    logger.error(f"Fallback Selenium również nie powiódł się: {se}")
-                    raise RuntimeError("Nie udało się pobrać strony intercity (403 i Selenium fallback nieudany).")
-            # jeśli response istnieje (status 200) -> użyj response.html
-            if 'response' in locals() and response.status_code == 200:
-                html = response.html
-
             table = html.find("table", first=True)
-
-            if not table:
-                logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie to koniec wyników.")
-                break
-
-            page_data = [
-                [d.text for d in row.find("td")[:5] + row.find("td")[6:]]
-                for row in table.find("tr")[1:]
-            ]
-
-            if not page_data:
-                logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
-                break
-
-            data.append(page_data)
-            i += 1
-
-            # small human-like sleep between page requests
-            time.sleep(random.uniform(0.4, 1.1))
         except Exception as e:
-            logger.error(f"Wystąpił błąd na stronie {i}: {e}")
+            logger.error(f"Nie udało się sparsować HTML na stronie {i}: {e}")
+            logger.debug(traceback.format_exc())
             break
+
+        if not table:
+            logger.info(f"Na stronie {i} nie znaleziono tabeli z danymi. Prawdopodobnie koniec wyników.")
+            break
+
+        rows = table.find("tr")[1:]
+        page_data = []
+        for row in rows:
+            cells = row.find("td")
+            if not cells:
+                continue
+            try:
+                row_data = [d.text for d in cells[:5] + cells[6:]]
+                page_data.append(row_data)
+            except Exception as e:
+                logger.debug(f"Błąd przy parsowaniu wiersza: {e}")
+
+        if not page_data:
+            logger.info(f"Tabela na stronie {i} jest pusta. Zakończono pobieranie.")
+            break
+
+        data.append(page_data)
+        logger.info(f"Pobrano {len(page_data)} rekordów ze strony {i}.")
+        i += 1
+        time.sleep(random.uniform(0.4, 1.1))  # mały odstęp między zapytaniami
 
     headers_data = [
         "domestic", "number", "category", "name", "from", "to",
@@ -134,11 +167,9 @@ def get_train_data(date: str, logger) -> list:
 
 if __name__ == "__main__":
     logger = setup_logging()
-
     logger.info("=" * 50)
     logger.info("ROZPOCZĘTO NOWY PROCES SCRAPOWANIA DANYCH O POCIĄGACH")
     logger.info("=" * 50)
-
 
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     train_data_wo_delays = get_train_data(today, logger)
@@ -160,6 +191,7 @@ if __name__ == "__main__":
         logger.info("Zapisywanie danych do pliku JSON zakończone pomyślnie.")
     except IOError as e:
         logger.critical(f"Nie udało się zapisać pliku JSON: {e}")
+        logger.debug(traceback.format_exc())
 
     logger.info("=" * 50)
     logger.info("PROCES SCRAPOWANIA ZAKOŃCZONY")
