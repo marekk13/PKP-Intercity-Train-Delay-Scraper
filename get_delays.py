@@ -257,10 +257,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
     opts.add_argument("--start-maximized")
 
     try:
-        driver = webdriver.Remote(
-            command_executor='http://localhost:4444/wd/hub',
-            options=opts
-        )
+        driver = webdriver.Chrome(options=opts)
         logger.info("Pomyślnie połączono z serwerem Selenium w kontenerze Docker.")
     except Exception as e:
         logger.critical(f"Nie udało się połączyć z serwerem Selenium. Błąd: {e}")

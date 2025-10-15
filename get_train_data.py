@@ -96,10 +96,7 @@ def get_train_data(date: str, logger) -> list:
                 opts.add_argument("--lang=pl-PL")
                 opts.add_argument("--user-agent=" + random.choice(USER_AGENTS))
 
-                driver = webdriver.Remote(
-                    command_executor="http://localhost:4444/wd/hub",
-                    options=opts
-                )
+                driver = webdriver.Chrome(options=opts)
                 driver.get(url)
                 page_source = driver.page_source
                 html = session.html_class(page_source)
