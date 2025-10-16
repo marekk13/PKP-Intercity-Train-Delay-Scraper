@@ -12,34 +12,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t train-scraper .
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Run scraper container (allow failure)
+      - name: Install dependencies
         run: |
-          docker run --name scraper-container --shm-size="2g" train-scraper || true
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
 
-      - name: Show container logs
-        run: docker logs scraper-container || true
+      - name: Run scraper
+        run: python get_train_data.py
 
-      - name: Copy outputs from container
-        run: |
-          mkdir -p outputs || true
-          if [ -d outputs ]; then rm -rf outputs/* || true; fi
-          if [ "$(docker ps -a -q -f name=scraper-container)" ]; then
-            docker cp scraper-container:/app/outputs ./outputs || true
-            docker cp scraper-container:/app/train_data_*.json ./outputs || true
-            docker cp scraper-container:/app/*.log ./outputs || true
-          else
-            echo "Container not found; nothing to copy."
-          fi
-
-      - name: Upload debug artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: scraper-debug
-          path: outputs/**
+          name: train-scraper-results
+          path: |
+            train_data_*.json
+            scraper_log_*.log
 
-      - name: Cleanup container
-        run: |
-          docker rm -f scraper-container || true
+      - name: Commit and push if data changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(data): Automatyczne dodanie danych o pociągach"
+          file_pattern: "*.json *.log"
