@@ -7,7 +7,7 @@ on:
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -24,17 +24,3 @@ jobs:
 
       - name: Run scraper
         run: python get_train_data.py
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: train-scraper-results
-          path: |
-            train_data_*.json
-            scraper_log_*.log
-
-      - name: Commit and push if data changed
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "feat(data): Automatyczne dodanie danych o pociągach"
-          file_pattern: "*.json *.log"
