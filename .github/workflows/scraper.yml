@@ -14,8 +14,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          python3 -m venv .venv
+          source .venv/bin/activate         
+          pip install -r requirements.txt        
           playwright install --with-deps chromium
 
       - name: Run scraper
-        run: python get_train_data.py
+        run: |
+          source .venv/bin/activate
+          python3 get_train_data.py
