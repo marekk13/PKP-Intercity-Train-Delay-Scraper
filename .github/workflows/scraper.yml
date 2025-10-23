@@ -2,7 +2,7 @@ name: Scrape Train Delays
 
 on:
   schedule:
-    - cron: '25 21 * * *'
+    - cron: '00 21 * * *'
   workflow_dispatch:
 
 jobs:

@@ -47,8 +47,16 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
         return None, None
 
     desc_part = info_array[0].strip()
-    if '##' in desc_part:
-        parts = desc_part.split('##', 1)
+    separators = ['##', '%']
+    separator_found = None
+
+    for sep in separators:
+        if sep in desc_part:
+            separator_found = sep
+            break
+
+    if separator_found:
+        parts = desc_part.split(separator_found, 1)
         description = parts[0].strip() if parts[0].strip() else None
         location = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
     else:
