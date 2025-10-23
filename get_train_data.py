@@ -109,6 +109,7 @@ if __name__ == "__main__":
     warsaw_timezone = ZoneInfo("Europe/Warsaw")
     now = datetime.datetime.now(warsaw_timezone)
     today = now.date()
+    train_data_wo_delays = get_train_data(today, logger)
 
     if not train_data_wo_delays:
         logger.warning("Nie udało się pobrać żadnych danych o pociągach. Zamykanie aplikacji.")
