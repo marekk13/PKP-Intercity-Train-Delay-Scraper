@@ -1,3 +1,4 @@
 playwright==1.48.0
 playwright-stealth==1.0.6
 setuptools<81
+supabase

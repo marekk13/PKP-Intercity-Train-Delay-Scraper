@@ -3,13 +3,14 @@ import json
 import logging
 import os
 import sys
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, TimeoutError
 from playwright_stealth import stealth_sync
 
 from get_delays import get_delays
 from logger_config import setup_logging
-
+from save_to_postgres import save_data
 
 def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
     """
@@ -105,8 +106,9 @@ if __name__ == "__main__":
     logger.info("=" * 50)
 
     # 2. Pobranie danych podstawowych
-    today = datetime.date.today()
-    train_data_wo_delays = get_train_data(today, logger)
+    warsaw_timezone = ZoneInfo("Europe/Warsaw")
+    now = datetime.datetime.now(warsaw_timezone)
+    today = now.date()
 
     if not train_data_wo_delays:
         logger.warning("Nie udało się pobrać żadnych danych o pociągach. Zamykanie aplikacji.")
@@ -119,7 +121,7 @@ if __name__ == "__main__":
     # 4. Zapis wyników do pliku JSON
     output_dir = "data"
     os.makedirs(output_dir, exist_ok=True)
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
+    now_str = now.strftime("%Y-%m-%d-%H%M")
     output_filename = os.path.join(output_dir, f"train_data_{now_str}.json")
     logger.info(f"Zapisywanie wszystkich danych do pliku: {output_filename}")
 
@@ -129,6 +131,9 @@ if __name__ == "__main__":
         logger.info("Zapisywanie danych do pliku JSON zakończone pomyślnie.")
     except IOError as e:
         logger.critical(f"Nie udało się zapisać pliku JSON: {e}")
+
+    logger.info("Rozpoczęto proces wysyłania danych do Supabase...")
+    save_data(data_with_delays, logger)
 
     logger.info("=" * 50)
     logger.info("PROCES SCRAPOWANIA ZAKOŃCZONY")
