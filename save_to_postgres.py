@@ -1,11 +1,7 @@
-# save_to_postgres.py
 import os
 import logging
 from supabase import create_client, Client
 from typing import Dict, List, Any, Tuple
-
-
-# --- Funkcje pomocnicze ---
 
 def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value: Any, cache: Dict[Any, int],
                       logger: logging.Logger) -> int:
@@ -16,11 +12,16 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
     if value in cache:
         return cache[value]
 
+    if not value or (isinstance(value, str) and not value.strip()):
+        logger.warning(f"Próba zapisu pustej wartości do tabeli '{table_name}'. Pomijanie.")
+        return None
+
     logger.info(f"Nowa wartość w tabeli '{table_name}': '{value}'. Dodawanie do bazy.")
     try:
-        response = supabase.table(table_name).insert(
+        supabase.table(table_name).upsert(
             {column_name: value},
-            on_conflict=column_name
+            on_conflict=column_name,
+            ignore_duplicates=True
         ).execute()
 
         select_response = supabase.table(table_name).select("id").eq(column_name, value).single().execute()
@@ -30,7 +31,7 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
             cache[value] = new_id
             return new_id
         else:
-            logger.error(f"Nie udało się pobrać ID dla nowo wstawionej wartości '{value}' w tabeli '{table_name}'.")
+            logger.error(f"Nie udało się pobrać ID dla wartości '{value}' w tabeli '{table_name}' po operacji upsert.")
             return None
     except Exception as e:
         logger.error(f"Błąd podczas operacji get_or_create dla tabeli '{table_name}': {e}")
@@ -57,7 +58,6 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
         location = info_array[1].strip()
 
     return description, location
-
 
 
 def save_data(data_with_delays: list, logger: logging.Logger):
@@ -115,9 +115,9 @@ def save_data(data_with_delays: list, logger: logging.Logger):
             occupancy_id = _get_or_create_id(supabase, 'occupancies', 'status_description', train_data.get("occupancy"),
                                              occupancies_cache, logger)
 
-            if not all([category_id, start_station_id, end_station_id]):
+            if not all([category_id, start_station_id, end_station_id, occupancy_id]):
                 logger.error(
-                    f"Pociąg nr {train_number}: Nie udało się uzyskać ID dla jednej z kluczowych relacji (kategoria/stacje). Pomijanie.")
+                    f"Pociąg nr {train_number}: Nie udało się uzyskać ID dla jednej z kluczowych relacji (kategoria/stacje/frekwencja). Pomijanie.")
                 runs_with_errors += 1
                 continue
 
@@ -132,14 +132,15 @@ def save_data(data_with_delays: list, logger: logging.Logger):
                 "occupancy_id": occupancy_id
             }
 
-            response = supabase.table("train_runs").insert(
+            response = supabase.table("train_runs").upsert(
                 run_to_insert,
-                on_conflict="number,date"
+                on_conflict="number,date",
+                ignore_duplicates=True
             ).execute()
 
             if not response.data:
                 logger.info(
-                    f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje w bazie. Pomijanie.")
+                    f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje w bazie lub wystąpił błąd. Pomijanie.")
                 runs_skipped += 1
                 continue
 
