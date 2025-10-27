@@ -48,66 +48,73 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     """Pobiera szczegółowe dane o trasie pociągu."""
     logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
-    # 1. Wpisz numer pociągu
     page.locator("#ftn-number").fill(train_number)
 
-    # 2. Kliknij „Szukaj”
     page.locator("#ftn-search").click()
 
-    # 3. Sprawdzenie komunikatu "brak kursujących pociągów"
+    try:
+        page.wait_for_selector(
+            "div.catalog-table, h3:has-text('W obecnej dobie brak kursujących pociągów'), div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')",
+            timeout=15000
+        )
+    except TimeoutError:
+        logger.warning(f"Strona nie załadowała wyników ani komunikatu o błędzie dla pociągu {train_number}.")
+        return "page_load_timeout"
+
     no_train_msg = page.locator("h3:has-text('W obecnej dobie brak kursujących pociągów')")
     if no_train_msg.is_visible():
-        msg = no_train_msg.inner_text()
-        logger.warning(f"Nie znaleziono pociągu o numerze {train_number}. Komunikat strony: '{msg.strip()}'")
+        logger.warning(
+            f"Nie znaleziono pociągu o numerze {train_number}. Komunikat strony: '{no_train_msg.inner_text().strip()}'")
         return "N/A"
 
-    # 4. Sprawdzenie błędu nieprawidłowego numeru
     invalid_nr_msg = page.locator("div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')")
     if invalid_nr_msg.is_visible():
         logger.warning(f"Dla numeru {train_number} znaleziono błąd: 'Wpisany numer pociągu jest nieprawidłowy'")
         return "N/A"
 
-    page.wait_for_timeout(300)
-    # 5. Sprawdzenie, czy wynik to inny numer pociągu
     try:
-        # Czekamy, aż wiersze z wynikami się załadują
-        page.wait_for_selector("div.catalog-table__row", timeout=5000)
-        # Pobieramy wszystkie wiersze z wynikami
-        result_rows = page.locator("div.catalog-table__row").all()
+        row_count = page.locator("div.catalog-table__row").count()
+        logger.info(f"Znaleziono {row_count} wierszy do sprawdzenia.")
 
         target_row = None
-        for row in result_rows:
-            carrier_locator = row.locator("div.col-1.col-6--phone").nth(2)
-            carrier = carrier_locator.inner_text().strip()
+        for i in range(row_count):
+            row = page.locator("div.catalog-table__row").nth(i)
+
+            carrier_element = row.locator("div:has(> span.item-label:has-text('Przewoźnik')) > strong.item-value")
+            numbers_container = row.locator("div:has(> span.item-label:has-text('Nr pociągu')) > strong.item-value")
+
+            if carrier_element.count() == 0 or numbers_container.count() == 0:
+                logger.warning(f"Wiersz {i + 1} ma niekompletną strukturę, pomijam.")
+                continue
+
+            carrier = carrier_element.inner_text().strip()
 
             if carrier == "IC":
-                # wszystkie numery pociągu z danego wiersza
-                number_locators = row.locator("div.col-1.col-6--phone").nth(4).locator("strong span").all()
-                found_numbers_str = [loc.inner_text().strip() for loc in number_locators]
+                found_numbers_str = numbers_container.locator("span").all_inner_texts()
 
-                # sprawdzamy, czy którykolwiek z numerów pasuje
+                if not found_numbers_str:
+                    found_numbers_str = [numbers_container.inner_text().strip()]
+
                 try:
-                    is_number_match = any(
-                        abs(int(num) - int(train_number)) <= 1 for num in found_numbers_str
-                    )
-                except ValueError:
+                    is_number_match = any(abs(int(num) - int(train_number)) <= 1 for num in found_numbers_str)
+                    if is_number_match:
+                        logger.info(f"Znaleziono pasujący pociąg IC w wierszu nr {i + 1}.")
+                        target_row = row
+                        break
+                except (ValueError, TypeError):
                     logger.warning(f"W wierszu znaleziono nieprawidłowy format numeru pociągu: {found_numbers_str}")
                     continue
 
-                if is_number_match:
-                    target_row = row
-                    break
+    except Exception as e:
+        logger.error(f"Wystąpił nieoczekiwany błąd podczas analizowania wierszy tabeli: {e}", exc_info=True)
+        return "parsing_error"
 
-        if not target_row:
-            logger.warning(f"Nie znaleziono pociągu IC o numerze zbliżonym do {train_number} na liście wyników.")
-            return "N/A"
-
-    except TimeoutError:
-        logger.warning(f"Nie znaleziono żadnych wyników dla numeru {train_number}.")
+    if not target_row:
+        logger.warning(
+            f"Przeanalizowano wszystkie wiersze, ale nie znaleziono pasującego pociągu IC dla numeru {train_number}.")
         return "N/A"
 
-    # 6. Kliknięcie w szczegóły trasy
-    details_link = page.locator("a.item-details.loadScr").first
+    details_link = target_row.locator("a.item-details.loadScr")
     try:
         details_link.click()
         page.wait_for_selector("div.timeline", timeout=15000)
@@ -115,7 +122,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
         logger.error(f"Nie można otworzyć szczegółów trasy dla pociągu {train_number}. Wyjątek: {e.__class__.__name__}")
         return "not_found"
 
-    # 7. Parsowanie listy stacji
+    # parsowanie listy stacji
     station_items = page.locator("div.timeline__item").all()
     route_details = []
 
@@ -207,7 +214,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=False)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             page = context.new_page()

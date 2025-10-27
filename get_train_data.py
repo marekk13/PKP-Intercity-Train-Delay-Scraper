@@ -43,22 +43,11 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
                 page.goto(url, timeout=30000)
 
                 table_selector = "table.table"
-                logger.info(f"Oczekiwanie na selektor: '{table_selector}'")
-                table = page.wait_for_selector(table_selector, timeout=15000)
+                logger.debug(f"Oczekiwanie na selektor: '{table_selector}'")
+                table = page.wait_for_selector(table_selector, timeout=1500)
 
             except TimeoutError:
                 logger.error(f"Na stronie {page_num} nie znaleziono tabeli. Uruchamiam diagnostykę.")
-
-                screenshot_path = f"debug_screenshot_page_{page_num}.png"
-                page.screenshot(path=screenshot_path, full_page=True)
-                logger.info(f"Zapisano zrzut ekranu do pliku: {screenshot_path}")
-
-                html_path = f"debug_page_content_{page_num}.html"
-                with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(page.content())
-                logger.info(f"Zapisano kod HTML strony do pliku: {html_path}")
-
-                logger.warning("Diagnostyka zakończona. Prawdopodobnie to koniec wyników lub błąd selektora.")
                 break
 
             rows = table.query_selector_all("tr")[1:]  # Pomijamy nagłówek
