@@ -70,27 +70,41 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     page.wait_for_timeout(300)
     # 5. Sprawdzenie, czy wynik to inny numer pociągu
     try:
-        result_locator = page.locator("div.col-1.col-6--phone strong span").first
-        result_locator.wait_for(timeout=5000)
-        search_train_nr = result_locator.inner_text()
-        if abs(int(search_train_nr) - int(train_number)) > 1:
-            logger.warning(
-                f"Nie znaleziono pociągu o numerze {train_number}. Zamiast tego znaleziono: {search_train_nr}")
+        # Czekamy, aż wiersze z wynikami się załadują
+        page.wait_for_selector("div.catalog-table__row", timeout=5000)
+        # Pobieramy wszystkie wiersze z wynikami
+        result_rows = page.locator("div.catalog-table__row").all()
+
+        target_row = None
+        for row in result_rows:
+            carrier_locator = row.locator("div.col-1.col-6--phone").nth(2)
+            carrier = carrier_locator.inner_text().strip()
+
+            if carrier == "IC":
+                # wszystkie numery pociągu z danego wiersza
+                number_locators = row.locator("div.col-1.col-6--phone").nth(4).locator("strong span").all()
+                found_numbers_str = [loc.inner_text().strip() for loc in number_locators]
+
+                # sprawdzamy, czy którykolwiek z numerów pasuje
+                try:
+                    is_number_match = any(
+                        abs(int(num) - int(train_number)) <= 1 for num in found_numbers_str
+                    )
+                except ValueError:
+                    logger.warning(f"W wierszu znaleziono nieprawidłowy format numeru pociągu: {found_numbers_str}")
+                    continue
+
+                if is_number_match:
+                    target_row = row
+                    break
+
+        if not target_row:
+            logger.warning(f"Nie znaleziono pociągu IC o numerze zbliżonym do {train_number} na liście wyników.")
             return "N/A"
+
     except TimeoutError:
         logger.warning(f"Nie znaleziono żadnych wyników dla numeru {train_number}.")
         return "N/A"
-
-    try:
-        carrier_locator = page.locator("div.catalog-table__row > div:nth-of-type(5) > strong.item-value").first
-        carrier = carrier_locator.inner_text()
-        if carrier != "IC":
-            logger.warning(
-                f"Znaleziony pociąg o numerze {train_number} nie jest obsługiwany przez PKP Intercity, tylko przez {carrier}.")
-            return "N/A"
-    except TimeoutError:
-        logger.warning(f"Nie udało się zweryfikować przewoźnika dla pociągu {train_number}.")
-        return "not_found"
 
     # 6. Kliknięcie w szczegóły trasy
     details_link = page.locator("a.item-details.loadScr").first
