@@ -214,7 +214,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             page = context.new_page()
@@ -227,7 +227,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
 
         page.goto(URL, timeout=30000)
         try:
-            # Kliknięcie cookies na początku
+            # K liknięcie cookies na początku
             cookie_button = page.locator("button:has-text('Akceptuj'), button:has-text('Zgoda')").first
             cookie_button.click(timeout=5000)
             logger.info("Zaakceptowano cookies.")
