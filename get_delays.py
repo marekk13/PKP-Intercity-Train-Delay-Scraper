@@ -50,6 +50,11 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
 
     page.locator("#ftn-number").fill(train_number)
 
+    try:
+        page.wait_for_load_state('networkidle', timeout=5000)
+    except TimeoutError:
+        logger.warning(f"Strona nie osiągnęła stanu 'networkidle' dla pociągu {train_number}. Mimo to kontynuuję.")
+
     page.locator("#ftn-search").click()
 
     try:
@@ -74,7 +79,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
 
     try:
         row_count = page.locator("div.catalog-table__row").count()
-        logger.info(f"Znaleziono {row_count} wierszy do sprawdzenia.")
+        logger.debug(f"Znaleziono {row_count} wierszy do sprawdzenia.")
 
         target_row = None
         for i in range(row_count):
@@ -98,7 +103,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
                 try:
                     is_number_match = any(abs(int(num) - int(train_number)) <= 1 for num in found_numbers_str)
                     if is_number_match:
-                        logger.info(f"Znaleziono pasujący pociąg IC w wierszu nr {i + 1}.")
+                        logger.debug(f"Znaleziono pasujący pociąg IC w wierszu nr {i + 1}.")
                         target_row = row
                         break
                 except (ValueError, TypeError):
@@ -123,7 +128,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
         return "not_found"
 
     # parsowanie listy stacji
-    station_items = page.locator("div.timeline__item").all()
+    station_items = page.locator("div.timeline--connection > div.timeline__item").all()
     route_details = []
 
     for item in station_items:
@@ -227,7 +232,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
 
         page.goto(URL, timeout=30000)
         try:
-            # K liknięcie cookies na początku
+            # Kliknięcie cookies na początku
             cookie_button = page.locator("button:has-text('Akceptuj'), button:has-text('Zgoda')").first
             cookie_button.click(timeout=5000)
             logger.info("Zaakceptowano cookies.")
