@@ -1,152 +1,204 @@
-# PKP Intercity Train Delay Scraper
+# PKP Intercity Train Data Scraper & Analysis Platform
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This project is a Python-based web scraper designed to automatically collect real-time delay information for all PKP Intercity trains operating in Poland. It generates a structured JSON file containing detailed, station-by-station data for each train journey.
+This project is a robust, automated data engineering pipeline designed to scrape, process, and store real-time train delay and occupancy data from Polish national rail carrier PKP Intercity. The collected data is normalized and persisted in a PostgreSQL database, creating a historical dataset suitable for analysis, reporting, and further applications.
 
 ## The Problem
 
-PKP Intercity, Poland's primary long-distance rail carrier, provides public data of significant interest, such as train schedules and real-time delays. However, this information is not made available through a public API or in a machine-readable format like JSON or CSV.
+Official Polish railway carriers provide valuable public data, such as real-time train schedules, delays, and disruptions. However, this information is not exposed via a public API or offered in a machine-readable format. Access is often protected by dynamic web elements and complex session handling, making automated data collection challenging. This practice limits transparency and hinders the creation of value-added services, despite EU directives (like Directive 2019/1024) promoting open data.
 
-Furthermore, the main passenger portal (`portalpasazera.pl`) protects access to specific train data using dynamically generated tokens (`sid` and `pid`), making automated data collection challenging. This practice contradicts the principles of open data and the EU Directive 2019/1024 on open data and the re-use of public sector information.
+This project bridges that gap by implementing a reliable, server-side pipeline that systematically gathers this public data and transforms it into a structured, queryable format.
 
-This project aims to bridge that gap by providing a reliable method for collecting this public data through web scraping, simulating user behavior in a headless browser.
+## Key Features
 
-## Features
+-   **Fully Automated Execution**: Runs on a daily schedule using GitHub Actions, requiring no manual intervention.
+-   **Robust Two-Stage Scraping**: Utilizes the modern **Playwright** framework to handle dynamic, JavaScript-heavy websites, ensuring reliability.
+-   **Structured Data Persistence**: Archives data in a normalized PostgreSQL database, enabling complex queries and historical analysis, not just storing raw files.
+-   **Data Normalization**: Implements a relational database schema to avoid data redundancy and ensure consistency (e.g., separate tables for stations, train categories, and disruptions).
+-   **Comprehensive Logging**: Features a dedicated logging module that outputs to both the console and versioned log files for easy debugging and monitoring.
+-   **Scalable and Maintainable**: The codebase is modular, with clear separation of concerns for data fetching, scraping, and database operations.
+-   **Backup and Archiving**: In addition to the database, each run generates a timestamped JSON file as a raw data backup.
 
--   Fetches a daily list of all active PKP Intercity trains, including their number, route, and occupancy predictions.
--   For each train, it retrieves detailed, real-time delay data from the official passenger portal.
--   Uses **Selenium** with a headless browser to navigate the dynamic, JavaScript-heavy website.
--   Handles common website errors, such as non-existent train numbers or search result mismatches.
--   Implements comprehensive logging to both the console and a daily log file (`scraper_log_YYYY-MM-DD.log`).
--   Outputs the collected data into a clean, structured, and timestamped JSON file for easy analysis.
+## System Architecture & Data Flow
 
-## How It Works
+The entire process is orchestrated by the main script and executed automatically within a GitHub Actions workflow.
 
-The data collection process is performed in two main steps, orchestrated by the main script `get_train_data.py`:
-
-1.  **Fetching the Train List:**
-    -   The script first sends a request to the PKP Intercity frequency page (`intercity.pl`).
-    -   It parses the HTML table to get a list of all trains scheduled for the current day, including their numbers, categories, names, and routes.
-
-2.  **Scraping Delay Details:**
-    -   Next, the script launches a Selenium-controlled headless Chrome browser.
-    -   For each train number obtained in the first step, it navigates to the Passenger Portal (`portalpasazera.pl`).
-    -   It automates the following actions:
-        -   Accepting the cookie consent banner.
-        -   Switching the search mode to "Search by number".
-        -   Entering the train number and clicking "Search".
-        -   Clicking on the correct search result to view the train's timeline.
-        -   Parsing the timeline to extract details for every station on the route: scheduled arrival/departure, actual delay in minutes, and any reported reasons for disruptions.
+1.  **Scheduled Trigger**: The `scraper.yml` workflow is triggered daily at a scheduled time.
+2.  **Fetch Initial Train List (`get_train_data.py`)**: The pipeline begins by scraping `intercity.pl` to get a complete list of all trains running on the target day. This initial data includes train number, name, category, and route.
+3.  **Scrape Detailed Delay Information (`get_delays.py`)**: For each train identified, a Playwright-controlled headless browser navigates to the `portalpasazera.pl` portal. It automates searching for the train by its number and meticulously parses its entire timeline to extract:
+    *   Scheduled and delayed arrival/departure times for every station.
+    *   Distance markers and travel time between stations.
+    *   Information about any disruptions or difficulties on the route.
+4.  **Persist Data to PostgreSQL (`save_to_postgres.py`)**: The processed data is then sent to a PostgreSQL database (via Supabase). This script handles:
+    *   Connecting to the database using secure environment variables.
+    *   Caching dictionary data (stations, categories) to minimize DB queries.
+    *   Normalizing the data by inserting or updating records across multiple tables (`train_runs`, `run_stops`, `stations`, `difficulties`, etc.).
+5.  **Generate JSON Backup**: A complete JSON dump of the session's scraped data is saved to the `data/` directory with a unique timestamp, serving as a persistent backup.
+6.  **Logging**: Throughout the process, events, warnings, and errors are logged to a timestamped file in the `logs/` directory.
 
 ## Tech Stack
 
--   **Python 3.x**
--   **Selenium**: For browser automation and scraping the main passenger portal.
--   **Requests-HTML**: For fetching and parsing the initial list of trains.
--   **WebDriverWait**: For robustly handling dynamic page elements and AJAX loading.
+-   **Language**: Python 3.x
+-   **Browser Automation**: **Playwright** for robustly handling modern, dynamic websites.
+-   **Database**: PostgreSQL.
+-   **Database Client**: **supabase-py** for interacting with the Supabase PostgreSQL backend.
+-   **Automation/CI/CD**: **GitHub Actions** for scheduled execution.
+-   **Infrastructure**: Deployed on a **self-hosted runner** (e.g., a cloud VM).
+
+## Database Schema
+
+The data is stored in a relational schema to ensure integrity and facilitate efficient querying. Below is a simplified overview of the main tables:
+
+-   `train_runs`: The central table, holding one record for each unique train journey on a specific date.
+    -   `id`, `number`, `name`, `date`, `category_id`, `start_station_id`, `end_station_id`, `occupancy_id`.
+-   `run_stops`: Links a train run to all the stations on its route.
+    -   `id`, `run_id`, `station_id`, `stop_order`, `scheduled_arrival`, `delay_arrival_min`, `distance_from_start_km`.
+-   `stations`: A dictionary table for all unique station names.
+    -   `id`, `name`.
+-   `train_categories`: A dictionary table for train types (e.g., IC, EIP, TLK).
+    -   `id`, `category_code`.
+-   `difficulties`: A dictionary table for unique disruption reasons.
+    -   `id`, `description`.
+-   `run_stop_difficulties`: A link table connecting a specific stop on a run with a reported difficulty.
+    -   `id`, `stop_id`, `difficulty_id`, `location`.
 
 ## Setup and Usage
 
 ### Prerequisites
 
 -   Python 3.8+
--   Google Chrome browser installed.
--   **ChromeDriver** compatible with your version of Google Chrome. [Download here](https://googlechromelabs.github.io/chrome-for-testing/).
-    > **Note:** Ensure that the `chromedriver` executable is either in your system's PATH or placed in the project's root directory.
+-   A running PostgreSQL database.
+-   Environment variables configured for database connection (see below).
 
 ### Installation
 
 1.  **Clone the repository:**
-    ```bash
-    git clone <your-repository-url>
-    cd <repository-directory>
-    ```
+```bash
+git clone <your-repository-url>
+cd <repository-directory>
+```
 
 2.  **Create and activate a virtual environment:**
-    ```bash
-    # For Windows
-    python -m venv venv
-    .\venv\Scripts\activate
+```bash
+# For macOS/Linux
+python3 -m venv .venv
+source .venv/bin/activate
 
-    # For macOS/Linux
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+# For Windows
+python -m venv .venv
+.venv\Scripts\activate
+```
 
-3.  **Install the required dependencies from `requirements.txt`:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+3.  **Install the required dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
-### Running the Scraper
+4.  **Install Playwright browser dependencies:**
+```bash
+playwright install chromium
+```
 
-To start the scraping process, simply run the main script:
+### Configuration
+
+The script requires environment variables to connect to the Supabase/PostgreSQL database. Create a `.env` file or set them in your environment.
+
+### Running the Scraper Manually
+
+To execute the entire pipeline manually, run the main script:
 
 ```bash
 python get_train_data.py
 ```
 
-The script will start logging its progress to the console and to a file named `scraper_log_YYYY-MM-DD.log`. Upon completion, a JSON file will be created in the root directory.
+## Automation with GitHub Actions
+
+This project is designed for automated execution using the provided workflow file.
+
+**File:** `.github/workflows/scraper.yml`
+
+```yaml
+name: Scrape Train Delays
+
+on:
+  schedule:
+    - cron: '00 22 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: self-hosted
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          clean: false # Prevents deletion of old data files
+
+      - name: Install dependencies and run scraper
+        # ... (steps to setup venv and run the script)
+```
+
+The workflow is configured to run on a **self-hosted runner**, which you must set up and connect to your GitHub repository. The `clean: false` option is used to ensure that historical JSON backups are preserved across runs.
 
 ## Output Structure
 
-### JSON Output File
+### 1. Primary Output: PostgreSQL Database
 
-The script generates a file named `train_data_YYYY-MM-DD-hhmm.json`. It contains a list of train objects.
+The most valuable output is the structured data populated in the PostgreSQL database, as described in the **Database Schema** section.
 
-**Example `train_data.json`:**
+### 2. Backup: JSON File
 
+For each run, a backup file is generated in the `data/` directory with a unique name like `train_data_YYYY-MM-DD-HHMM.json`.
+
+**Example `train_data.json` entry:**
 ```json
 [
   {
     "domestic": "Krajowy",
-    "number": "1026",
+    "number": "5322",
     "category": "IC",
-    "name": "SKARYNA",
-    "from": "Warszawa Wschodnia",
-    "to": "Terespol",
+    "name": "MAZURY",
+    "from": "Olsztyn Główny",
+    "to": "Łódź Fabryczna",
     "occupancy": "Szacowana frekwencja poniżej 50%",
+    "date": "2025-11-04",
     "delay_info": [
       {
-        "station_name": "Warszawa Wschodnia",
+        "station_name": "Olsztyn Główny",
         "arrival_time": null,
-        "departure_time": "07:27",
+        "departure_time": "09:40",
         "delay_minutes_arrival": null,
-        "delay_minutes_departure": null,
-        "distance_km_to_next": 36.3,
-        "travel_time_to_next": "0h:19min",
-        "difficulties_info": [
-          "Inne przyczyny związane z utrzymaniem linii kolejowych",
-          "Warszawa Wschodnia"
-        ]
+        "delay_minutes_departure": 0,
+        "distance_km_from_start_to_next": 12.3,
+        "travel_time_from_start_to_next": "0h:10min",
+        "difficulties_info": ["", ""]
       },
       {
-        "station_name": "Mińsk Mazowiecki",
-        "arrival_time": "07:48",
-        "departure_time": "07:49",
-        "delay_minutes_arrival": 17,
-        "delay_minutes_departure": 17,
-        "distance_km_to_next": 54.4,
-        "travel_time_to_next": "0h:28min",
-        "difficulties_info": [
-          "",
-          ""
-        ]
+        "station_name": "Olsztyn Zachodni",
+        "arrival_time": "09:44",
+        "departure_time": "09:45",
+        "delay_minutes_arrival": 0,
+        "delay_minutes_departure": 0,
+        "distance_km_from_start_to_next": 25.8,
+        "travel_time_from_start_to_next": "0h:15min",
+        "difficulties_info": ["", ""]
       }
-    ],
-    "date": "2025-06-23"
+    ]
   }
 ]
 ```
 
-### Log File
+### 3. Log Files
 
-A log file named `scraper_log_YYYY-MM-DD.log` is created daily, capturing all events, warnings, and errors that occurred during the script's execution.
+A detailed log file is created for each run in the `logs/` directory (e.g., `scraper_log_2025-11-04-2310.log`), capturing all operational events, warnings, and errors.
 
 ## Disclaimer
 
-This tool is intended for educational and informational purposes only. The data is scraped from publicly accessible websites. Please use this script responsibly and be mindful of the websites' terms of service. The author is not responsible for any misuse of this tool.
+This tool is intended for educational and data analysis purposes. It scrapes data from publicly accessible websites. Please use this script responsibly and be mindful of the websites' terms of service. The author is not responsible for any misuse of this tool.
 
 ## License
 
