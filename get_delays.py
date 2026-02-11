@@ -10,7 +10,7 @@ def parse_delay(delay_text: str) -> int:
     """Wyciąga liczbę minut opóźnienia z tekstu"""
     if not delay_text:
         return 0
-    match = re.search(r'\(\+(\d+)\s*min\)', delay_text)
+    match = re.search(r'\(\+(\d+)\s*min\)', delay_text, re.IGNORECASE)
     return int(match.group(1)) if match else 0
 
 
@@ -147,7 +147,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
             departure_time = dep_time_text.split('\n')[1].strip() if '\n' in dep_time_text else None
 
         delay_minutes_arrival = None
-        delay_arr_locator = item.locator("span.timeline__numbers-time__stop span.inlinedelay")
+        delay_arr_locator = item.locator("span.timeline__numbers-time__stop span.inlinedelay, span.timeline__numbers-time__stop span.blockdelay")
         if delay_arr_locator.count() > 0:
             all_texts = delay_arr_locator.all_inner_texts()
             delay_minutes_arrival = parse_delay(all_texts[-1]) if all_texts else 0
