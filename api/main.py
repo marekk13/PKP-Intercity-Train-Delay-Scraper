@@ -51,6 +51,8 @@ class TrainSummary(BaseModel):
 class StationScheduleItem(BaseModel):
     train_number: str
     train_category: Optional[str]
+    from_station: Optional[str]
+    to_station: Optional[str]
     direction: Optional[str]
     scheduled_arrival: Optional[str]
     scheduled_departure: Optional[str]
