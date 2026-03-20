@@ -48,14 +48,14 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     """Pobiera szczegółowe dane o trasie pociągu."""
     logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
-    page.locator("#ftn-number").fill(train_number)
+    page.locator("#ftnu-number").fill(train_number)
 
     try:
         page.wait_for_load_state('networkidle', timeout=5000)
     except TimeoutError:
         logger.warning(f"Strona nie osiągnęła stanu 'networkidle' dla pociągu {train_number}. Mimo to kontynuuję.")
 
-    page.locator("#ftn-search").click()
+    page.locator("#ftnu-search").click()
 
     try:
         page.wait_for_selector(
