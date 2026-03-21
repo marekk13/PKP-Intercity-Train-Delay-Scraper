@@ -6,7 +6,15 @@ import sys
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, TimeoutError
-from playwright_stealth import Stealth
+
+try:
+    from playwright_stealth import stealth_sync
+    def apply_stealth(page):
+        stealth_sync(page)
+except ImportError:
+    from playwright_stealth import Stealth
+    def apply_stealth(page):
+        Stealth().apply_stealth_sync(page)
 
 from get_delays import get_delays
 from logger_config import setup_logging
@@ -26,7 +34,7 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             page = context.new_page()
-            Stealth().apply_stealth_sync(page)
+            apply_stealth(page)
         except Exception as e:
             logger.critical(f"Nie udało się zainicjować przeglądarki Playwright: {e}")
             return []
