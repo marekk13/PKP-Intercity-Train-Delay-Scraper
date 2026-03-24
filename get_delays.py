@@ -151,12 +151,16 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
         if delay_arr_locator.count() > 0:
             all_texts = delay_arr_locator.all_inner_texts()
             delay_minutes_arrival = parse_delay(all_texts[-1]) if all_texts else 0
+        elif arrival_time is not None:
+            delay_minutes_arrival = 0
 
         delay_minutes_departure = None
         delay_depart_locator = item.locator("span.timeline__numbers-time__start span.inlinedelay, span.timeline__numbers-time__start span.blockdelay")
         if delay_depart_locator.count() > 0:
             all_texts = delay_depart_locator.all_inner_texts()
             delay_minutes_departure = parse_delay(all_texts[-1]) if all_texts else 0
+        elif departure_time is not None:
+            delay_minutes_departure = 0
 
         info_text = ""
         info_locator = item.locator("p.timeline__numbers-km")
