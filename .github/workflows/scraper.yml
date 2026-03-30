@@ -2,7 +2,7 @@ name: Scrape Train Delays
 
 on:
   schedule:
-    - cron: '00 22 * * *'
+    - cron: "00 21 * * *"
   workflow_dispatch:
 
 jobs:
@@ -15,7 +15,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-            clean: false
+          clean: false
 
       - name: Install dependencies
         run: |
