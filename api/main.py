@@ -76,6 +76,21 @@ class TrainDetail(TrainSummary):
 
 # --- Endpoints ---
 
+@app.get("/stations", response_model=List[str])
+def list_stations(db: Client = Depends(get_db)):
+    """
+    Returns a list of domestic station names ranked by passenger volume (cacheable on frontend).
+    """
+    try:
+        response = db.table("stations")\
+            .select("name")\
+            .eq("is_domestic", True)\
+            .order("passenger_volume_rank", nullsfirst=False)\
+            .execute()
+        return [s["name"] for s in response.data]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 @app.get("/train-runs", response_model=List[TrainSummary])
 def list_trains(
     date: Optional[date] = None,
