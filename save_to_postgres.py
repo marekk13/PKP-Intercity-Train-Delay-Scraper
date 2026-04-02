@@ -72,6 +72,127 @@ STATION_NAME_OVERRIDES = {
     "Wilnus": "Vilnius"
 }
 
+TRAIN_NAME_OVERRIDES = {
+    "BACZYNSKI": "Baczyński",
+    "BALTYK": "Bałtyk",
+    "BLATNIA": "Błatnia",
+    "BOLESLAW PRUS": "Bolesław Prus",
+    "CHELMIANIN": "Chełmianin",
+    "CHELMONSKI": "Chełmoński",
+    "DABROWSKA": "Dąbrowska",
+    "DASZYNSKI": "Daszyński",
+    "DEBOWIEC": "Dębowiec",
+    "DRWECA": "Drwęca",
+    "FALAT": "Fałat",
+    "GALCZYNSKI": "Gałczyński",
+    "GORNIK": "Górnik",
+    "GORSKI": "Górski",
+    "HANCZA": "Hańcza",
+    "JACWING": "Jaćwing",
+    "JAGIELLO": "Jagiełło",
+    "KARLOWICZ": "Karłowicz",
+    "KILINSKI": "Kiliński",
+    "KOZIOLEK": "Koziołek",
+    "KRASINSKI": "Krasiński",
+    "LEMPICKA": "Łempicka",
+    "LESMIAN": "Leśmian",
+    "LOKIETEK": "Łokietek",
+    "LUKASIEWICZ": "Łukasiewicz",
+    "LYSICA": "Łysica",
+    "LUZYCE": "Łużyce",
+    "MALOPOLSKA": "Małopolska",
+    "MARSZALEK PILSUDSKI": "Marszałek Piłsudski",
+    "NALKOWSKA": "Nałkowska",
+    "NOTEC": "Noteć",
+    "OLENKA": "Oleńka",
+    "ORLOWICZ": "Orłowicz",
+    "PARSETA": "Parsęta",
+    "POBRZEZE": "Pobrzeże",
+    "POGORZE": "Pogórze",
+    "POLONINY": "Połoniny",
+    "PORAZINSKA": "Porazińska",
+    "POWISLE": "Powiśle",
+    "PRZASNICZKA": "Przaśniczka",
+    "PRZEMYSLANIN": "Przemyślanin",
+    "PULASKI": "Pułaski",
+    "RADZIWILL": "Radziwiłł",
+    "SLAZAK": "Ślązak",
+    "SLEZA": "Ślęża",
+    "SLOWACKI": "Słowacki",
+    "SLOWINIEC": "Słowiniec",
+    "SLUPIA": "Słupia",
+    "SNIEZKA": "Śnieżka",
+    "STANCZYK": "Stańczyk",
+    "STARZYNSKI": "Starzyński",
+    "STRYJENSKA": "Stryjeńska",
+    "SWAROZYC": "Swarożyc",
+    "WISLOK": "Wisłok",
+    "WLOKNIARZ": "Włókniarz",
+    "WYBRZEZE": "Wybrzeże",
+    "WYCZOLKOWSKI": "Wyczółkowski",
+    "WYSPIANSKI": "Wyspiański",
+    "ZEGLARZ": "Żeglarz",
+    "ZEROMSKI": "Żeromski",
+    "ZIELONOGORZANIN": "Zielonogórzanin",
+    "ZUBR": "Żubr",
+    "ZULAWY": "Żuławy",
+    "ZYLICA": "Żylica",
+}
+
+def _get_or_create_service_id(supabase: Client, service_data: Dict[str, Any], cache: Dict[Tuple, int], logger: logging.Logger) -> int:
+    """
+    Pobiera service_id z cache lub z bazy danych. 
+    Jeśli pociąg (numer, trasa, kategoria) istnieje, ale ma inną nazwę, aktualizuje ją.
+    Jeśli nie istnieje, tworzy nowy wpis.
+    """
+    # Klucz cache uwzględnia docelową (poprawną) nazwę
+    cache_key = (
+        service_data['number'],
+        service_data['name'],
+        service_data['category_id'],
+        service_data['is_domestic'],
+        service_data['start_station_id'],
+        service_data['end_station_id']
+    )
+
+    if cache_key in cache:
+        return cache[cache_key]
+
+    try:
+        # Szukamy usługi po cechach unikalnych, ignorując (na chwilę) samą treść nazwy, 
+        # aby uniknąć duplikatów wynikających z wielkości liter lub braku ogonków.
+        search_query = {
+            "number": service_data['number'],
+            "category_id": service_data['category_id'],
+            "start_station_id": service_data['start_station_id'],
+            "end_station_id": service_data['end_station_id']
+        }
+        
+        response = supabase.table('train_services').select('id, name').match(search_query).execute()
+
+        if response.data:
+            existing_service = response.data[0]
+            service_id = existing_service['id']
+            
+            # Jeśli nazwa w bazie różni się od tej, którą chcemy (np. ALL CAPS vs Title Case), aktualizujemy ją.
+            if existing_service['name'] != service_data['name']:
+                logger.info(f"Aktualizacja nazwy pociągu {service_data['number']}: '{existing_service['name']}' -> '{service_data['name']}'")
+                supabase.table('train_services').update({"name": service_data['name']}).eq('id', service_id).execute()
+            
+            cache[cache_key] = service_id
+            return service_id
+
+        # Jeśli nie znaleziono usługi — tworzymy nową
+        insert_response = supabase.table('train_services').insert(service_data).execute()
+        if insert_response.data:
+            new_id = insert_response.data[0]['id']
+            cache[cache_key] = new_id
+            return new_id
+
+    except Exception as e:
+        logger.error(f"Błąd podczas pobierania/tworzenia service_id dla pociągu {service_data.get('number')}: {e}")
+    return None
+
 def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value: Any, cache: Dict[Any, int],
                       logger: logging.Logger, new_stations: Set[str] = None) -> int:
     """
@@ -173,8 +294,16 @@ def save_data(data_with_delays: list, logger: logging.Logger):
                              supabase.table('occupancies').select('id, status_description').execute().data}
         difficulties_cache = {d['description']: d['id'] for d in
                               supabase.table('difficulties').select('id, description').execute().data}
+
+        # Cache dla usług (pociągów) - kluczem jest krotka cech
+        services_data = supabase.table('train_services').select('id, number, name, category_id, is_domestic, start_station_id, end_station_id').execute().data
+        services_cache = {
+            (s['number'], s['name'], s['category_id'], s['is_domestic'], s['start_station_id'], s['end_station_id']): s['id']
+            for s in services_data
+        }
+
         logger.info(
-            f"Wczytano: {len(stations_cache)} stacji, {len(categories_cache)} kategorii, {len(occupancies_cache)} statusów frekwencji, {len(difficulties_cache)} utrudnień.")
+            f"Wczytano: {len(stations_cache)} stacji, {len(categories_cache)} kategorii, {len(services_cache)} usług (pociągów).")
 
     except Exception as e:
         logger.critical(f"Krytyczny błąd podczas inicjalizacji połączenia lub cache'a: {e}")
@@ -209,20 +338,43 @@ def save_data(data_with_delays: list, logger: logging.Logger):
                 runs_with_errors += 1
                 continue
 
-            run_to_insert = {
+            # Obsługa nazwy pociągu (overrides i formatowanie)
+            train_name_raw = train_data.get("name", "").strip()
+            if train_name_raw in TRAIN_NAME_OVERRIDES:
+                train_name = TRAIN_NAME_OVERRIDES[train_name_raw]
+            elif "-" in train_name_raw:
+                # Jeśli nazwa zawiera '-', traktujemy ją jako techniczny placeholder relacji
+                # Zostawiamy FULL CAPS, aby frontend mógł to odfiltrować
+                train_name = train_name_raw
+            else:
+                # Pozostałe nazwy własne formatujemy do Title Case (np. Albatros)
+                train_name = train_name_raw.title()
+
+            # Pobranie/Utworzenie service_id
+            service_data = {
                 "number": train_number,
-                "name": train_data.get("name"),
-                "is_domestic": train_data.get("domestic") == "Krajowy",
-                "date": train_data.get("date"),
+                "name": train_name,
                 "category_id": category_id,
+                "is_domestic": train_data.get("domestic") == "Krajowy",
                 "start_station_id": start_station_id,
-                "end_station_id": end_station_id,
+                "end_station_id": end_station_id
+            }
+            service_id = _get_or_create_service_id(supabase, service_data, services_cache, logger)
+
+            if not service_id:
+                logger.error(f"Pociąg nr {train_number}: Nie udało się uzyskać service_id. Pomijanie.")
+                runs_with_errors += 1
+                continue
+
+            run_to_insert = {
+                "service_id": service_id,
+                "date": train_data.get("date"),
                 "occupancy_id": occupancy_id
             }
 
             response = supabase.table("train_runs").upsert(
                 run_to_insert,
-                on_conflict="number,date",
+                on_conflict="service_id,date",
                 ignore_duplicates=True
             ).execute()
 

@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Query, Depends
@@ -6,16 +6,14 @@ from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime, timedelta
 
 load_dotenv()
 app = FastAPI(title="Train Delays API")
 
-# domeny które mogą rozmawiać z backendem
 origins = [
-    "http://localhost:3000",          # testy lokalne frontendu
-    "https://marekk13.github.io",     # strona na GH Pages
-    "https://spoznienia.me",          # domena docelowa
+    "http://localhost:3000",          
+    "https://marekk13.github.io",     
+    "https://spoznienia.me",          
 ]
 
 app.add_middleware(
