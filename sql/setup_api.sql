@@ -75,5 +75,5 @@ BEGIN
     ORDER BY 
         COALESCE(rs.scheduled_arrival, rs.scheduled_departure) ASC;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
