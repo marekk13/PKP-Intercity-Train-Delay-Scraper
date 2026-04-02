@@ -11,6 +11,8 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPO: ${{ github.repository }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -28,3 +30,15 @@ jobs:
         run: |
           source .venv/bin/activate
           python3 get_train_data.py
+
+      - name: Commit new stations if discovered
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add misc/stations.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(stations): add newly discovered stations [skip ci]"
+            git push
+          else
+            echo "No new stations discovered, nothing to commit."
+          fi
