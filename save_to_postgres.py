@@ -3,12 +3,81 @@ import logging
 from supabase import create_client, Client
 from typing import Dict, List, Any, Tuple
 
+STATION_NAME_OVERRIDES = {
+    "Kraków Główny Osobowy": "Kraków Główny",
+    "Gdynia Główna Osobowa": "Gdynia Główna",
+    "Lublin": "Lublin Główny",
+    "Rzeszów": "Rzeszów Główny",
+    "Zielona Góra": "Zielona Góra Główna",
+    "Radom": "Radom Główny",
+    "Krynica": "Krynica-Zdrój",
+    "Bielsko Biała Główna": "Bielsko-Biała Główna",
+    "Kudowa Zdrój": "Kudowa-Zdrój",
+    "Polanica Zdrój": "Polanica-Zdrój",
+    "Olsztyn Główny/Szczecin Główny": "Olsztyn Główny",
+    "Szczecin Główny/Świnoujście": "Szczecin Główny",
+
+    "Berlin Hauptbahn": "Berlin Hauptbahnhof",
+    "Berlin-Charlotte": "Berlin-Charlottenburg",
+    "Berlin Zoolog Garten": "Berlin Zoologischer Garten",
+    "Leipzig Hbf": "Leipzig Hauptbahnhof",
+    "Muenchen Hbf": "München Hauptbahnhof",
+    "Muenchen Ost": "München Ost",
+    "Graz Hbf": "Graz Hauptbahnhof",
+    "Muerzzuschlag": "Mürzzuschlag",
+    "Salzburg Hbf.": "Salzburg Hauptbahnhof",
+    "St.Poelten Hbf": "St. Pölten Hauptbahnhof",
+    "Wien Hbf": "Wien Hauptbahnhof",
+    "Wien Westbf": "Wien Westbahnhof",
+
+    "Dnipro": "Dnipro-Holovnyi",
+    "Dnipro Hl.": "Dnipro-Holovnyi",
+    "Harkov-Passajirs": "Kharkiv-Pasazhyrskyi",
+    "Charków": "Kharkiv-Pasazhyrskyi",
+    "Kiev-Passajirski": "Kyiv-Pasazhyrskyi",
+    "Kyiv-Pas.": "Kyiv-Pasazhyrskyi",
+    "Kijów": "Kyiv-Pasazhyrskyi",
+    "Odessa-Glavnaia": "Odesa-Holovna",
+    "Zaporoze": "Zaporizhzhia-1",
+    "Zaporoże": "Zaporizhzhia-1",
+    "Krzywy Róg": "Kryvyi Rih",
+    
+    "Bratislava Hlavna Stanica": "Bratislava hlavná stanica",
+    "Bohumin": "Bohumín",
+    "Breclav": "Břeclav",
+    "Ceska Trebova": "Česká Třebová",
+    "Hodonin": "Hodonín",
+    "Hranice na Morave": "Hranice na Moravě",
+    "Jablonne nad Orlici": "Jablonné nad Orlicí",
+    "Nove Zamky": "Nové Zámky",
+    "Olomouc Hlavni Nadrazi": "Olomouc hlavní nádraží",
+    "Ostrava Hlavni Nadrazi": "Ostrava hlavní nádraží",
+    "Pardubice Hlavni Nadrazi": "Pardubice hlavní nádraží",
+    "Praha Hlavni Nadrazi": "Praha hlavní nádraží",
+    "Praha": "Praha hlavní nádraží",
+    "Praha hl.n.": "Praha hlavní nádraží",
+    "Praha-Liben": "Praha-Libeň",
+    "Praha-Vrsovice": "Praha-Vršovice",
+    "Prerov": "Přerov",
+    "Stare Mesto u Uher. Hradiste": "Staré Město u Uherského Hradiště",
+    "Zabreh na Morave": "Zábřeh na Moravě",
+    "Usti nad Orlici": "Ústí nad Orlicí",
+    "Usti nad Orlici Mesto": "Ústí nad Orlicí město",
+    "Sturovo": "Štúrovo",
+
+    # Litwa
+    "Wilnus": "Vilnius"
+}
+
 def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value: Any, cache: Dict[Any, int],
                       logger: logging.Logger) -> int:
     """
     Pobiera ID z cache'a lub tworzy nowy wpis w bazie danych, jeśli nie istnieje.
     Zwraca ID wpisu.
     """
+    if table_name == 'stations' and isinstance(value, str) and value in STATION_NAME_OVERRIDES:
+        value = STATION_NAME_OVERRIDES[value]
+
     if value in cache:
         return cache[value]
 
@@ -18,8 +87,13 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
 
     logger.info(f"Nowa wartość w tabeli '{table_name}': '{value}'. Dodawanie do bazy.")
     try:
+        insert_data = {column_name: value}
+        if table_name == 'stations':
+            insert_data["is_domestic"] = True
+            insert_data["passenger_volume_rank"] = None
+
         supabase.table(table_name).upsert(
-            {column_name: value},
+            insert_data,
             on_conflict=column_name,
             ignore_duplicates=True
         ).execute()

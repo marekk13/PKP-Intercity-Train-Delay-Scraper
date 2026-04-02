@@ -84,30 +84,10 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
         "occupancy", "delay_info", "date"
     ]
 
-    STATION_NAME_OVERRIDES = {
-        "Kraków Główny Osobowy": "Kraków Główny",
-        "Gdynia Główna Osobowa": "Gdynia Główna",
-        "Lublin": "Lublin Główny",
-        "Rzeszów": "Rzeszów Główny",
-        "Zielona Góra": "Zielona Góra Główna",
-        "Radom": "Radom Główny",
-        "Krynica": "Krynica-Zdrój",
-        "Bielsko Biała Główna": "Bielsko-Biała Główna",
-        "Kudowa Zdrój": "Kudowa-Zdrój",
-        "Polanica Zdrój": "Polanica-Zdrój"
-    }
-
     result_list = []
     for train_row in all_trains_data:
         train_dict = dict(zip(headers_data, train_row))
         train_dict["date"] = target_date.strftime("%Y-%m-%d")
-        
-        # Oczyszczanie niepoprawnych z góry nazw stacji z intercity.pl
-        if "from" in train_dict:
-            train_dict["from"] = STATION_NAME_OVERRIDES.get(train_dict["from"], train_dict["from"])
-        if "to" in train_dict:
-            train_dict["to"] = STATION_NAME_OVERRIDES.get(train_dict["to"], train_dict["to"])
-            
         result_list.append(train_dict)
 
     logger.info(f"Pobrano łącznie podstawowe dane dla {len(result_list)} pociągów.")
