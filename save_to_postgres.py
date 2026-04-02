@@ -1,7 +1,9 @@
 import os
+import json
 import logging
+import urllib.request
 from supabase import create_client, Client
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Set
 
 STATION_NAME_OVERRIDES = {
     "Kraków Główny Osobowy": "Kraków Główny",
@@ -10,6 +12,7 @@ STATION_NAME_OVERRIDES = {
     "Rzeszów": "Rzeszów Główny",
     "Zielona Góra": "Zielona Góra Główna",
     "Radom": "Radom Główny",
+    "Kielce": "Kielce Główne",
     "Krynica": "Krynica-Zdrój",
     "Bielsko Biała Główna": "Bielsko-Biała Główna",
     "Kudowa Zdrój": "Kudowa-Zdrój",
@@ -70,7 +73,7 @@ STATION_NAME_OVERRIDES = {
 }
 
 def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value: Any, cache: Dict[Any, int],
-                      logger: logging.Logger) -> int:
+                      logger: logging.Logger, new_stations: Set[str] = None) -> int:
     """
     Pobiera ID z cache'a lub tworzy nowy wpis w bazie danych, jeśli nie istnieje.
     Zwraca ID wpisu.
@@ -103,6 +106,8 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
         if select_response.data:
             new_id = select_response.data['id']
             cache[value] = new_id
+            if table_name == 'stations' and new_stations is not None:
+                new_stations.add(value)
             return new_id
         else:
             logger.error(f"Nie udało się pobrać ID dla wartości '{value}' w tabeli '{table_name}' po operacji upsert.")
@@ -178,6 +183,7 @@ def save_data(data_with_delays: list, logger: logging.Logger):
     runs_inserted, runs_skipped, runs_with_errors = 0, 0, 0
     stops_inserted = 0
     difficulties_links_inserted = 0
+    new_stations: Set[str] = set()  # stacje odkryte po raz pierwszy w tej sesji
 
     for train_data in data_with_delays:
         train_number = train_data.get("number")
@@ -189,13 +195,13 @@ def save_data(data_with_delays: list, logger: logging.Logger):
 
         try:
             category_id = _get_or_create_id(supabase, 'train_categories', 'category_code', train_data.get("category"),
-                                            categories_cache, logger)
+                                            categories_cache, logger, None)
             start_station_id = _get_or_create_id(supabase, 'stations', 'name', train_data.get("from"), stations_cache,
-                                                 logger)
+                                                 logger, new_stations)
             end_station_id = _get_or_create_id(supabase, 'stations', 'name', train_data.get("to"), stations_cache,
-                                               logger)
+                                               logger, new_stations)
             occupancy_id = _get_or_create_id(supabase, 'occupancies', 'status_description', train_data.get("occupancy"),
-                                             occupancies_cache, logger)
+                                             occupancies_cache, logger, None)
 
             if not all([category_id, start_station_id, end_station_id, occupancy_id]):
                 logger.error(
@@ -239,7 +245,7 @@ def save_data(data_with_delays: list, logger: logging.Logger):
             lagged_distance = 0.0
             for i, stop_data in enumerate(delay_info):
                 station_id = _get_or_create_id(supabase, 'stations', 'name', stop_data.get("station_name"),
-                                               stations_cache, logger)
+                                               stations_cache, logger, new_stations)
                 if not station_id:
                     logger.warning(
                         f"Pociąg nr {train_number}: Nie można znaleźć/utworzyć stacji '{stop_data.get('station_name')}'. Pomijanie przystanku.")
@@ -305,4 +311,93 @@ def save_data(data_with_delays: list, logger: logging.Logger):
     logger.info(f"Przejazdy z błędami: {runs_with_errors}")
     logger.info(f"Wstawione przystanki: {stops_inserted}")
     logger.info(f"Dodane powiązania utrudnień: {difficulties_links_inserted}")
+    if new_stations:
+        logger.warning(f"NOWE STACJE ODKRYTE ({len(new_stations)}): {sorted(new_stations)}")
     logger.info("=" * 30)
+
+    # Powiadomienie GitHub Issue jeśli odkryto nowe stacje
+    if new_stations:
+        _append_to_stations_json(sorted(new_stations), logger)
+        _create_github_issue(sorted(new_stations), logger)
+
+def _append_to_stations_json(new_stations: list, logger: logging.Logger):
+    """
+    Dopisuje nowo odkryte stacje krajowe na koniec misc/stations.json.
+    Ten plik jest później commitowany przez GitHub Actions i serwowany jako
+    statyczny plik przez GitHub Pages — stanowi źródło prawdy dla validStations.
+    """
+    from pathlib import Path
+    stations_path = Path(__file__).parent / 'misc' / 'stations.json'
+
+    if not stations_path.exists():
+        logger.warning(f"Nie znaleziono {stations_path} — pomijam aktualizację listy stacji.")
+        return
+
+    try:
+        existing = json.loads(stations_path.read_text(encoding='utf-8'))
+        added = []
+        for name in new_stations:
+            if name not in existing:
+                existing.append(name)
+                added.append(name)
+
+        if added:
+            stations_path.write_text(
+                json.dumps(existing, ensure_ascii=False, indent=2),
+                encoding='utf-8'
+            )
+            logger.info(f"Dopisano {len(added)} stacji do misc/stations.json: {added}")
+        else:
+            logger.info("Wszystkie nowe stacje już istnieją w misc/stations.json.")
+    except Exception as e:
+        logger.error(f"Błąd podczas aktualizacji misc/stations.json: {e}")
+
+
+def _create_github_issue(new_stations: list, logger: logging.Logger):
+    """
+    Tworzy GitHub Issue z listą nowych stacji.
+    Wymaga zmiennej środowiskowej GITHUB_TOKEN oraz GITHUB_REPO (np. 'marekk13/PKP-Intercity-Train-Delay-Scraper').
+    Powiadomienie push przychodzi automatycznie przez apkę GitHub Mobile.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    repo  = os.environ.get("GITHUB_REPO", "marekk13/PKP-Intercity-Train-Delay-Scraper")
+
+    if not token:
+        logger.warning("Brak GITHUB_TOKEN — nie można utworzyć GitHub Issue. Nowe stacje: %s", new_stations)
+        return
+
+    station_list = '\n'.join(f'- `{s}`' for s in new_stations)
+    body = (
+        f"Skrypt scrapera wykrył **{len(new_stations)}** nową/nowych stację/stacji "
+        f"nieobecnych wcześniej w bazie danych.\n\n"
+        f"{station_list}\n\n"
+        f"**Działania:**\n"
+        f"1. Sprawdź czy stacja powinna znaleźć się w `misc/stations.json`\n"
+        f"2. Jeśli tak — dodaj ją i uruchom `misc/sort_stations.py`\n"
+        f"3. Upewnij się, że `is_domestic` jest ustawione poprawnie w bazie"
+    )
+
+    payload = json.dumps({
+        "title": f"[Scraper] Nowe stacje: {', '.join(new_stations[:3])}{'...' if len(new_stations) > 3 else ''}",
+        "body": body,
+        "labels": ["nowa stacja", "wymaga uwagi"]
+    }).encode()
+
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/issues",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        },
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            issue = json.loads(resp.read())
+            logger.info(f"GitHub Issue #{issue['number']} utworzone: {issue['html_url']}")
+    except Exception as e:
+        logger.error(f"Błąd tworzenia GitHub Issue: {e}")
