@@ -132,7 +132,8 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     route_details = []
 
     for item in station_items:
-        station_name = item.locator("h3.timeline__content-station").inner_text().split(":", 1)[-1].strip()
+        raw_station_name = item.locator("h3.timeline__content-station").inner_text().split(":", 1)[-1].strip()
+        station_name = re.sub(r'(?i)\s*przesiadka$', '', raw_station_name).strip()
 
         arrival_time = None
         arrival_locator = item.locator("span.timeline__numbers-time__stop")
