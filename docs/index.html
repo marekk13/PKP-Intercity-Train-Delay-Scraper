@@ -449,10 +449,30 @@
                         <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
                             <thead class="sticky top-0 z-20 shadow-sm">
                                 <tr class="bg-slate-100 text-slate-600 text-[13px] uppercase tracking-wider border-b border-slate-200">
-                                    <th class="py-3 px-5 font-semibold bg-slate-100">Pociąg</th>
-                                    <th class="py-3 px-5 font-semibold bg-slate-100">Stacja początkowa</th>
-                                    <th class="py-3 px-5 font-semibold bg-slate-100">Stacja końcowa</th>
-                                    <th class="py-3 px-5 font-semibold text-right bg-slate-100">Opóźnienie końcowe</th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors group select-none" onclick="appState.sortSearch('number')">
+                                        <div class="flex items-center gap-1.5">
+                                            Pociąg
+                                            <svg id="sort-icon-number" class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors group select-none" onclick="appState.sortSearch('start_station')">
+                                        <div class="flex items-center gap-1.5">
+                                            Stacja początkowa
+                                            <svg id="sort-icon-start_station" class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors group select-none" onclick="appState.sortSearch('end_station')">
+                                        <div class="flex items-center gap-1.5">
+                                            Stacja końcowa
+                                            <svg id="sort-icon-end_station" class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                                        </div>
+                                    </th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100 cursor-pointer hover:bg-slate-200 transition-colors group select-none" onclick="appState.sortSearch('delay')">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <svg id="sort-icon-delay" class="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-colors opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+                                            Opóźnienie końcowe
+                                        </div>
+                                    </th>
                                     <th class="py-3 px-5 font-semibold text-center w-32 bg-slate-100">Akcje</th>
                                 </tr>
                             </thead>
@@ -1533,6 +1553,111 @@
         }
 
         // Search Train View Logic
+        const appState = {
+            searchResults: [],
+            sortColumn: null,
+            sortDirection: 'asc',
+            
+            sortSearch: function(col) {
+                if (!this.searchResults.length) return;
+                
+                if (this.sortColumn === col) {
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortColumn = col;
+                    this.sortDirection = 'asc';
+                }
+                
+                // Update icons
+                ['number', 'start_station', 'end_station', 'delay'].forEach(c => {
+                    const icon = document.getElementById('sort-icon-' + c);
+                    if (!icon) return;
+                    if (c === this.sortColumn) {
+                        icon.classList.remove('opacity-0');
+                        icon.classList.add('opacity-100', 'text-blue-500');
+                        icon.classList.remove('text-slate-400', 'group-hover:text-slate-600');
+                        if (this.sortDirection === 'asc') {
+                            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>';
+                        } else {
+                            icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>';
+                        }
+                    } else {
+                        icon.classList.remove('opacity-100', 'text-blue-500');
+                        icon.classList.add('opacity-0', 'text-slate-400', 'group-hover:text-slate-600');
+                        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>';
+                    }
+                });
+
+                // Sort data
+                this.searchResults.sort((a, b) => {
+                    let valA, valB;
+                    if (col === 'number') {
+                        valA = a.number || '';
+                        valB = b.number || '';
+                        // attempt numerical sort if possible
+                        if (!isNaN(parseInt(valA)) && !isNaN(parseInt(valB))) {
+                            valA = parseInt(valA);
+                            valB = parseInt(valB);
+                        }
+                    } else if (col === 'start_station') {
+                        valA = (a.from_station || '').toLowerCase();
+                        valB = (b.from_station || '').toLowerCase();
+                    } else if (col === 'end_station') {
+                        valA = (a.to_station || '').toLowerCase();
+                        valB = (b.to_station || '').toLowerCase();
+                    } else if (col === 'delay') {
+                        valA = a.delay_at_destination ?? -1;
+                        valB = b.delay_at_destination ?? -1;
+                    }
+                    
+                    if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                
+                renderSearchResults();
+            }
+        };
+
+        function renderSearchResults() {
+            const tbody = document.getElementById('search-results-body');
+            tbody.innerHTML = '';
+            
+            appState.searchResults.forEach(train => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50/40 transition-colors group cursor-pointer";
+                tr.onclick = (event) => {
+                    if(!event.target.closest('button')) openDetailModal(train.id);
+                };
+
+                const d = getDelayStyling(train.delay_at_destination);
+
+                tr.innerHTML = `
+                    <td class="py-4 px-5 align-middle">
+                        <div class="font-bold text-slate-800 text-base">${train.category || ''} ${train.number}</div>
+                        ${train.name && !train.name.includes('-') ? `<div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">${train.name}</div>` : ''}
+                    </td>
+                    <td class="py-4 px-5 align-middle text-slate-700 font-medium">
+                        ${cleanStationName(train.from_station)}
+                        <div class="text-xs text-slate-400 mt-0.5">Odjazd: ${train.scheduled_departure ? train.scheduled_departure.substring(0,5) : '-'}</div>
+                    </td>
+                    <td class="py-4 px-5 align-middle text-slate-700 font-medium">
+                        ${cleanStationName(train.to_station)}
+                        <div class="text-xs text-slate-400 mt-0.5">Planowo: ${train.scheduled_arrival ? train.scheduled_arrival.substring(0,5) : '-'}</div>
+                    </td>
+                    <td class="py-4 px-5 align-middle text-right">
+                        <span class="${d.class} bg-slate-50 px-2 py-1 rounded inline-block">${d.text}</span>
+                    </td>
+                    <td class="py-4 px-5 align-middle text-center">
+                        <button onclick="openDetailModal('${train.id}')" class="text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-600 hover:text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all shadow-sm">
+                            Szczegóły
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
         document.getElementById('search-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             if (document.activeElement) document.activeElement.blur();
@@ -1606,36 +1731,17 @@
                     empty.classList.remove('hidden');
                 } else {
                     container.classList.remove('hidden');
-                    data.forEach(train => {
-                        const tr = document.createElement('tr');
-                        tr.className = "hover:bg-blue-50/40 transition-colors group cursor-pointer";
-                        tr.onclick = (event) => {
-                            if(!event.target.closest('button')) openDetailModal(train.id);
-                        };
-
-                        const d = getDelayStyling(train.delay_at_destination);
-
-                        tr.innerHTML = `
-                            <td class="py-4 px-5 align-middle">
-                                <div class="font-bold text-slate-800 text-base">${train.category || ''} ${train.number}</div>
-                                ${train.name && !train.name.includes('-') ? `<div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">${train.name}</div>` : ''}
-                            </td>
-                            <td class="py-4 px-5 align-middle text-slate-700 font-medium">${cleanStationName(train.from_station)}</td>
-                            <td class="py-4 px-5 align-middle text-slate-700 font-medium">
-                                ${cleanStationName(train.to_station)}
-                                <div class="text-xs text-slate-400 mt-0.5">Planowo: ${train.scheduled_arrival ? train.scheduled_arrival.substring(0,5) : '-'}</div>
-                            </td>
-                            <td class="py-4 px-5 align-middle text-right">
-                                <span class="${d.class} bg-slate-50 px-2 py-1 rounded inline-block">${d.text}</span>
-                            </td>
-                            <td class="py-4 px-5 align-middle text-center">
-                                <button onclick="openDetailModal('${train.id}')" class="text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-600 hover:text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all shadow-sm">
-                                    Szczegóły
-                                </button>
-                            </td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
+                    appState.searchResults = data;
+                    
+                    // Add sorting visualization reset when fetching new results
+                    if(appState.sortColumn) {
+                        appState.sortSearch(appState.sortColumn); // Triggers re-render correctly
+                        // Toggle back direction over to keeping it consistent
+                        appState.sortDirection = appState.sortDirection === 'asc' ? 'desc' : 'asc';
+                        appState.sortSearch(appState.sortColumn);
+                    } else {
+                        renderSearchResults();
+                    }
                 }
             } catch (err) {
                 clearTimeout(loadTimeout);

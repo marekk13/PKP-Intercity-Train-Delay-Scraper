@@ -246,7 +246,7 @@
   }
 ]</code></pre>
                 
-                <h4 class="font-bold text-gray-900 mb-3">Model danych:</h4>
+                <h4 class="font-bold text-gray-900 mb-3 mt-10">Model danych:</h4>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200 mb-6">
                         <thead class="bg-slate-100 text-slate-700">
@@ -265,7 +265,7 @@
                             <tr><td class="p-3 font-mono font-bold">from_station</td><td class="p-3">string</td><td class="p-3">Stacja początkowa całej trasy</td></tr>
                             <tr><td class="p-3 font-mono font-bold">to_station</td><td class="p-3">string</td><td class="p-3">Stacja końcowa całej trasy</td></tr>
                             <tr><td class="p-3 font-mono font-bold">is_domestic</td><td class="p-3">boolean</td><td class="p-3">Czy pociąg jest krajowy (true) czy międzynarodowy (false)</td></tr>
-                            <tr><td class="p-3 font-mono font-bold">occupancy</td><td class="p-3">string</td><td class="p-3">Przewidywana frekwencja (opcjonalnie)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">occupancy</td><td class="p-3">string</td><td class="p-3">Przewidywana frekwencja</td></tr>
                             <tr><td class="p-3 font-mono font-bold">scheduled_departure</td><td class="p-3">string</td><td class="p-3">Planowy odjazd ze stacji początkowej (HH:MM:SS)</td></tr>
                             <tr><td class="p-3 font-mono font-bold">scheduled_arrival</td><td class="p-3">string</td><td class="p-3">Planowy przyjazd na stację końcową (HH:MM:SS)</td></tr>
                             <tr><td class="p-3 font-mono font-bold">delay_at_destination</td><td class="p-3">integer</td><td class="p-3">Opóźnienie na stacji końcowej (w minutach)</td></tr>
@@ -325,7 +325,7 @@
   }
 ]</code></pre>
                 
-                <h4 class="font-bold text-gray-900 mb-3">Model danych:</h4>
+                <h4 class="font-bold text-gray-900 mb-3 mt-10">Model danych:</h4>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200 mb-6">
                         <thead class="bg-slate-100 text-slate-700">
@@ -427,7 +427,7 @@
   ]
 }</code></pre>
                 
-                <h4 class="font-bold text-gray-900 mb-3">Model danych (Stops):</h4>
+                <h4 class="font-bold text-gray-900 mb-3 mt-10">Model danych (stops):</h4>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
                         <thead class="bg-slate-100 text-slate-700">
@@ -443,7 +443,7 @@
                             <tr><td class="p-3 font-mono font-bold">departure_time</td><td class="p-3">Planowy czas odjazdu (HH:MM:SS)</td></tr>
                             <tr><td class="p-3 font-mono font-bold">delay_minutes_arrival</td><td class="p-3">Opóźnienie przyjazdu (minuty)</td></tr>
                             <tr><td class="p-3 font-mono font-bold">delay_minutes_departure</td><td class="p-3">Opóźnienie odjazdu (minuty)</td></tr>
-                            <tr><td class="p-3 font-mono font-bold">distance_from_start_km</td><td class="p-3">Dystans od stacji początkowej (km)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">distance_from_start_km</td><td class="p-3">Dystans od stacji początkowej (km) - dotyczy tylko stacji krajowych</td></tr>
                             <tr><td class="p-3 font-mono font-bold">is_domestic</td><td class="p-3">Czy stacja znajduje się na terenie Polski (true/false)</td></tr>
                             <tr><td class="p-3 font-mono font-bold">difficulties</td><td class="p-3">Lista obiektów ze szczegółami utrudnienia (pola: <code>description</code>, <code>location</code>)</td></tr>
                         </tbody>
