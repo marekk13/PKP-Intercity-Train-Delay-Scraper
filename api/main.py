@@ -1,28 +1,85 @@
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from supabase import create_client, Client
 import os
+import time
+import logging
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
+# ── Logging setup ──────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger("train_api")
+
 load_dotenv()
+
+# ── Startup timestamp (do mierzenia czasu od cold-startu) ─────────────────────
+_startup_time: float = time.time()
+_first_request_time: Optional[float] = None
+_requests_since_startup: int = 0
+
 app = FastAPI(title="Train Delays API")
 
 origins = [
-    "http://localhost:3000",          
-    "https://marekk13.github.io",     
-    "https://spoznienia.me",          
+    "http://localhost:3000",
+    "https://marekk13.github.io",
+    "https://spoznienia.me",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,           
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],             
-    allow_headers=["*"],              
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def on_startup():
+    global _startup_time
+    _startup_time = time.time()
+    logger.info("=== API SERVER STARTED (cold start) at %s ===", datetime.utcnow().isoformat())
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    global _first_request_time, _requests_since_startup
+
+    now = time.time()
+    uptime_s = now - _startup_time
+    _requests_since_startup += 1
+    req_no = _requests_since_startup
+
+    if _first_request_time is None:
+        _first_request_time = now
+        logger.info(
+            "[REQ#%d] FIRST request after startup! Uptime: %.1fs | %s %s",
+            req_no, uptime_s, request.method, request.url.path
+        )
+    else:
+        idle_s = now - _first_request_time
+        logger.info(
+            "[REQ#%d] %s %s | uptime=%.1fs | req_since_start=%d",
+            req_no, request.method, request.url.path, uptime_s, req_no
+        )
+
+    t0 = time.time()
+    response = await call_next(request)
+    elapsed_ms = (time.time() - t0) * 1000
+
+    logger.info(
+        "[REQ#%d] -> %d | %.0fms",
+        req_no, response.status_code, elapsed_ms
+    )
+    return response
+
 
 def get_db() -> Client:
     url: str = os.environ.get("SUPABASE_URL")
@@ -51,7 +108,6 @@ class StationScheduleItem(BaseModel):
     train_category: Optional[str]
     from_station: Optional[str]
     to_station: Optional[str]
-    direction: Optional[str]
     scheduled_arrival: Optional[str]
     scheduled_departure: Optional[str]
     delay_arrival_min: Optional[int]
@@ -67,7 +123,7 @@ class StopDetail(BaseModel):
     delay_minutes_arrival: Optional[int]
     delay_minutes_departure: Optional[int]
     distance_from_start_km: float
-    difficulties: List[str] = []
+    difficulties: List[dict] = []
 
 class TrainDetail(TrainSummary):
     stops: List[StopDetail]
@@ -87,6 +143,7 @@ def list_stations(db: Client = Depends(get_db)):
             .execute()
         return [s["name"] for s in response.data]
     except Exception as e:
+        logger.error("Error in list_stations: %s", str(e))
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/train-runs", response_model=List[TrainSummary])
@@ -139,6 +196,7 @@ def get_station_schedule(
         
         return response.data
     except Exception as e:
+        logger.error("Error in get_station_schedule (station=%s, date=%s): %s", name, date, str(e))
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -177,7 +235,10 @@ def get_train_detail(train_id: str, db: Client = Depends(get_db)):
         if s.get('run_stop_difficulties'):
             for d in s['run_stop_difficulties']:
                  if d.get('difficulties'):
-                     diffs.append(d['difficulties']['description'])
+                     diffs.append({
+                         "description": d['difficulties']['description'],
+                         "location": d.get('location')
+                     })
         
         stops_data.append(StopDetail(
             station_name=s['stations']['name'],
