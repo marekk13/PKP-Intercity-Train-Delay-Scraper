@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spoznienia.me - Historyczne opóźnienia pociągów PKP Intercity</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%232563eb' rx='6'/%3E%3Cpath fill='white' d='M16 21l1.5-2.5h-11L8 21h8zM15 4H9C6 4 4 5.5 4 8v8a3 3 0 003 3h10a3 3 0 003-3V8c0-2.5-2-4-5-4z'/%3E%3Crect x='6' y='7' width='12' height='4' rx='1' fill='%232563eb'/%3E%3Ccircle cx='8.5' cy='14.5' r='1.5' fill='%232563eb'/%3E%3Ccircle cx='15.5' cy='14.5' r='1.5' fill='%232563eb'/%3E%3C/svg%3E" type="image/svg+xml">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Flatpickr (Wybór daty z lukami) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/pl.js"></script>
+
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .tab-active {
+            border-bottom: 2px solid #2563eb;
+            color: #1d4ed8;
+            font-weight: 600;
+        }
+        .tab-inactive {
+            color: #64748b;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-inactive:hover {
+            color: #334155;
+            border-bottom: 2px solid #cbd5e1;
+        }
+        /* Loader */
+        .loader {
+            border: 3px solid #f1f5f9;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        [x-cloak] { display: none !important; }
+        
+        /* CustomScrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Flatpickr Customization - Premium & Aesthetic */
+        .flatpickr-calendar {
+            background: #ffffff !important;
+            box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.15) !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 24px !important;
+            padding: 12px !important;
+            font-family: inherit !important;
+            width: 336px !important; /* Increased width to fix Sunday (Nd) cutoff */
+            margin-top: 5px !important;
+        }
+        .flatpickr-months {
+            padding: 0 10px !important;
+            margin-bottom: 10px !important;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            height: 50px !important;
+            z-index: 50 !important;
+        }
+        .flatpickr-months .flatpickr-month {
+            background: #fff !important;
+            color: #1e293b !important;
+            height: 50px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: visible !important;
+        }
+        
+        /* Centered Arrows Alignment */
+        .flatpickr-prev-month, .flatpickr-next-month {
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            padding: 10px !important;
+            border-radius: 12px !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            color: #64748b !important;
+            fill: #64748b !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 36px !important;
+            width: 36px !important;
+        }
+        .flatpickr-prev-month:hover, .flatpickr-next-month:hover {
+            background: #f1f5f9 !important;
+            color: #2563eb !important;
+        }
+        .flatpickr-prev-month:hover svg, .flatpickr-next-month:hover svg {
+            fill: #2563eb !important;
+        }
+        .flatpickr-prev-month svg, .flatpickr-next-month svg {
+            width: 14px !important;
+            height: 14px !important;
+        }
+        
+        /* Month Selector - styled like a premium dropdown */
+        .flatpickr-current-month {
+            font-weight: 400 !important; /* Not bold */
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+            width: 100% !important;
+            left: 0 !important;
+            position: static !important;
+            height: auto !important;
+            font-size: 100% !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months {
+            font-weight: 500 !important;
+            padding: 6px 12px !important;
+            border-radius: 12px !important;
+            transition: all 0.2s !important;
+            font-size: 16px !important;
+            color: #1e293b !important;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            border: 1px solid transparent !important;
+            margin-right: 4px !important;
+            background: #f8fafc !important;
+        }
+        .flatpickr-current-month .flatpickr-monthDropdown-months:hover {
+            background: #f1f5f9 !important;
+            border-color: #e2e8f0 !important;
+            color: #2563eb !important;
+        }
+        
+        /* Year Input with styled arrows */
+        .flatpickr-current-month .numInputWrapper {
+            width: 75px !important;
+            border-radius: 12px !important;
+            transition: all 0.2s !important;
+            border: 1px solid transparent !important;
+            padding: 2px !important;
+            background: #f8fafc !important;
+        }
+        .flatpickr-current-month .numInputWrapper:hover {
+            background: #f1f5f9 !important;
+            border-color: #e2e8f0 !important;
+        }
+        .flatpickr-current-month input.cur-year {
+            font-weight: 500 !important;
+            color: #1e293b !important;
+            font-size: 16px !important;
+            padding: 4px 0 !important;
+            background: transparent !important;
+        }
+        .flatpickr-current-month .numInputWrapper span {
+            border: none !important;
+            background: transparent !important;
+            width: 20px !important;
+        }
+        .flatpickr-current-month .numInputWrapper span.arrowUp:after {
+            border-bottom-color: #2563eb !important;
+            border-width: 0 4px 5px 4px !important;
+        }
+        .flatpickr-current-month .numInputWrapper span.arrowDown:after {
+            border-top-color: #2563eb !important;
+            border-width: 5px 4px 0 4px !important;
+        }
+        .flatpickr-current-month .numInputWrapper span:hover {
+            background: #e2e8f0 !important;
+            border-radius: 4px !important;
+        }
+
+        .flatpickr-weekday {
+            color: #94a3b8 !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            font-size: 11px !important;
+            background: transparent !important;
+            padding-bottom: 8px !important;
+        }
+        .flatpickr-innerContainer {
+            padding: 8px 0 !important;
+        }
+        .flatpickr-days {
+            width: 312px !important;
+        }
+        .dayContainer {
+            width: 312px !important;
+            min-width: 312px !important;
+            max-width: 312px !important;
+        }
+        .flatpickr-day {
+            border-radius: 12px !important;
+            font-weight: 500 !important;
+            color: #334155 !important;
+            border: 1px solid transparent !important;
+            margin: 2px !important;
+            max-width: 40px !important;
+            height: 40px !important;
+            line-height: 40px !important;
+        }
+        .flatpickr-day:hover {
+            background: #f1f5f9 !important;
+            color: #2563eb !important;
+        }
+        .flatpickr-day.today {
+            border-color: #2563eb !important;
+            color: #2563eb !important;
+            background: #eff6ff !important;
+        }
+        .flatpickr-day.selected, .flatpickr-day.selected:hover {
+            background: #2563eb !important;
+            border-color: #2563eb !important;
+            color: #fff !important;
+            box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.4) !important;
+            font-weight: 700 !important;
+        }
+        .flatpickr-day.flatpickr-disabled, .flatpickr-day.flatpickr-disabled:hover {
+            color: #cbd5e1 !important;
+            background: transparent !important;
+            cursor: not-allowed !important;
+        }
+        .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay {
+            color: #e2e8f0 !important;
+        }
+
+        /* Mobile specific fixes */
+        @media (max-width: 380px) {
+            .flatpickr-calendar {
+                width: 300px !important;
+                padding: 10px !important;
+            }
+            .flatpickr-days, .dayContainer {
+                width: 280px !important;
+                min-width: 280px !important;
+                max-width: 280px !important;
+            }
+            .flatpickr-current-month .numInputWrapper {
+                width: 65px !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col relative selection:bg-blue-200 selection:text-blue-900">
+
+    <!-- Navbar -->
+    <nav id="top-navbar" class="glass sticky top-0 z-50 transition-all duration-300">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+                    <div class="bg-blue-600 p-1.5 rounded-lg shadow-sm">
+                        <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M15 4H9C6 4 4 5.5 4 8v8a3 3 0 003 3h10a3 3 0 003-3V8c0-2.5-2-4-5-4z M6 7 h12 v4 h-12 z M8.5 13 a1.5 1.5 0 1 0 0 3 a1.5 1.5 0 1 0 0 -3 z M15.5 13 a1.5 1.5 0 1 0 0 3 a1.5 1.5 0 1 0 0 -3 z M16 21l1.5-2.5H6.5L8 21h8z"/>
+                        </svg>
+                    </div>
+                    <span class="font-extrabold text-xl tracking-tight text-slate-900">spoznienia<span class="text-blue-600">.me</span></span>
+                </div>
+                <!-- Links -->
+                <div class="flex items-center gap-3 sm:gap-6">
+                    <a href="api/" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors duration-200 flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                        <span class="hidden sm:inline">API dla programistów</span>
+                        <span class="sm:hidden">API</span>
+                    </a>
+                    <a href="https://github.com/marekk13/PKP-Intercity-Train-Delay-Scraper" target="_blank" rel="noopener noreferrer" class="text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition shadow-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
+                        <span class="hidden sm:inline">GitHub</span>
+                    </a>
+                    <button onclick="copyEmail(this)" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors duration-200 flex items-center gap-1.5 focus:outline-none" title="Skopiuj adres e-mail (marekkos37@gmail.com)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        <span class="hidden sm:inline contact-text">Kontakt</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col z-10">
+        
+        <!-- Header / Hero -->
+        <header class="text-center py-10 sm:py-14 lg:py-20 relative">
+            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
+                Historyczna baza<br/>opóźnień PKP Intercity
+            </h1>
+            <p class="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-8 leading-relaxed">
+                Sprawdzaj rzeczywiste czasy przejazdów i utrudnienia na pełnych trasach pociągów. Baza obsługuje dane od 23 października 2025.
+            </p>
+            
+            <!-- Data Limitations Summary Box -->
+            <div class="mt-4 mb-4 text-left mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative z-50 w-full sm:max-w-3xl">
+                <div class="bg-amber-50 border-b border-amber-100 px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-amber-100/50 transition-colors" onclick="document.getElementById('limitations-content').classList.toggle('hidden'); document.getElementById('limitations-arrow').classList.toggle('rotate-180')">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <div>
+                            <strong class="block text-amber-900 mb-0.5 leading-tight">Dane z dzisiaj pojawią się w bazie jutro.</strong>
+                            <span class="text-amber-700/80 text-xs font-semibold">Poznaj szczegóły ograniczeń bazy danych.</span>
+                        </div>
+                    </div>
+                    <svg id="limitations-arrow" class="w-5 h-5 text-amber-700 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+                <div id="limitations-content" class="px-5 py-5 text-sm text-slate-600 grid grid-cols-1 md:grid-cols-2 gap-4 hidden bg-white">
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-green-100 text-green-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Początek archiwum</strong>
+                            Baza gromadzi dane od 23 października 2025 r.
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-blue-100 text-blue-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Cykl aktualizacji</strong>
+                            Aplikacja przetwarza opóźnienia pod koniec dnia. Rzeczywiste dane z danego dnia poznasz dopiero w dniu następnym.
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-red-100 text-red-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Stacje początkowe</strong>
+                            Do 23 marca 2026 r. włącznie algorytm nie rejestrował danych o opóźnieniach dla niektórych pierwszych stacji na trasie pociągów.
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-amber-100 text-amber-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Puste dni</strong>
+                            Brak danych dla: 3, 18, 19, 20 marca oraz 29 marca 2026. Skrypt miał w tych dniach nieplanowane przestoje.
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-slate-100 text-slate-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Zastępcza Komunikacja Autobusowa (ZKA) i pociągi międzynarodowe</strong>
+                            Autobusy ZKA i pociągi z zagranicy nie figurują w bazie na żywo. Wynika to z braków śledzenia trasy na poziomie głównego dostawcy.
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <div class="mt-0.5 p-1 bg-purple-100 text-purple-600 rounded-md shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg></div>
+                        <div>
+                            <strong class="block text-slate-800 mb-0.5">Pociągi nocne</strong>
+                            Dla kursów po północy dane mogą być niepełne lub wyzerowane ze względu na dobowy reset danych w źródle (Portal Pasażera).
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- UI App Container -->
+        <div class="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 overflow-hidden min-h-[500px] flex flex-col mb-12">
+            
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-200 bg-slate-50/50 px-2 sm:px-6 pt-2 gap-2 sm:gap-6 overflow-x-auto no-scrollbar">
+                <button onclick="switchTab('board')" id="tab-board" class="px-4 py-3 text-sm sm:text-base whitespace-nowrap tab-active transition-all outline-none">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                        Historyczna tablica stacyjna
+                    </div>
+                </button>
+                <button onclick="switchTab('search')" id="tab-search" class="px-4 py-3 text-sm sm:text-base whitespace-nowrap tab-inactive transition-all outline-none">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        Wyszukaj pociąg
+                    </div>
+                </button>
+            </div>
+
+            <!-- Tab Content: Search Train -->
+            <div id="content-search" class="hidden flex-grow p-5 sm:p-8 relative">
+                <form id="search-form" class="mb-8 flex flex-col gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">Data</label>
+                            <input type="text" id="search-date" placeholder="Wybierz datę..." class="w-full rounded-xl border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-slate-50 hover:bg-white px-4 py-2.5 text-slate-900 outline-none border transition-colors cursor-pointer">
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1 truncate" title="Numer pociągu (opcjonalnie)">Numer pociągu (opcj.)</label>
+                            <input type="text" id="search-number" placeholder="np. 5322" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-slate-50 hover:bg-white px-4 py-2.5 text-slate-900 outline-none border transition-colors">
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1 truncate" title="Stacja początkowa/końcowa (opcjonalnie)">Stacja pocz/końc. (opcj.)</label>
+                            <input type="text" id="search-station" placeholder="np. Kraków Główny" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-slate-50 hover:bg-white pl-4 pr-10 py-2.5 text-slate-900 outline-none border transition-colors">
+                        </div>
+                        <div class="md:col-span-2 flex items-end">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-xl shadow-[0_4px_14px_0_rgb(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:transform hover:-translate-y-[1px] transition-all active:scale-[0.98] flex justify-center items-center h-[46px]">
+                                Szukaj
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center ml-1 mt-1">
+                        <label class="flex items-center gap-2.5 cursor-pointer group relative w-max">
+                            <input type="checkbox" id="filter-no-data" checked class="w-4 h-4 text-blue-600 bg-slate-50 border-slate-300 rounded focus:ring-blue-500 cursor-pointer">
+                            <span class="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">Ukryj pociągi bez danych o opóźnieniach</span>
+                            
+                            <!-- Tooltip icon & popup -->
+                            <div class="text-slate-400 group-hover:text-blue-500 pt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <div class="absolute left-0 top-8 hidden group-hover:block w-72 p-3 bg-slate-800 text-slate-100 text-xs rounded-lg shadow-xl z-50 leading-relaxed pointer-events-none">
+                                Dotyczy głównie <strong>Zastępczej Komunikacji Autobusowej (ZKA)</strong> oraz wybranych pociągów międzynarodowych, dla których system PKP z reguły nie udostępnia czasów rzeczywistych.
+                                <div class="absolute -top-2 left-6 w-4 h-4 bg-slate-800 transform rotate-45"></div>
+                            </div>
+                        </label>
+                    </div>
+                </form>
+
+                <div id="search-loading" class="hidden absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center pt-10">
+                    <div class="loader mb-4 border-blue-600 border-t-transparent"></div>
+                    <p class="text-slate-600 font-medium text-center">Wyszukiwanie historycznych połączeń...</p>
+                </div>
+
+                <div id="search-error" class="hidden mb-6 p-4 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-medium flex items-center gap-3">
+                    <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                    <span id="search-error-text"></span>
+                </div>
+
+                <div id="search-results-container" class="hidden overflow-hidden rounded-xl border border-slate-200 shadow-sm flex flex-col max-h-[65vh]">
+                    <div class="overflow-x-auto overflow-y-auto flex-grow relative">
+                        <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                            <thead class="sticky top-0 z-20 shadow-sm">
+                                <tr class="bg-slate-100 text-slate-600 text-[13px] uppercase tracking-wider border-b border-slate-200">
+                                    <th class="py-3 px-5 font-semibold bg-slate-100">Pociąg</th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100">Stacja początkowa</th>
+                                    <th class="py-3 px-5 font-semibold bg-slate-100">Stacja końcowa</th>
+                                    <th class="py-3 px-5 font-semibold text-right bg-slate-100">Opóźnienie końcowe</th>
+                                    <th class="py-3 px-5 font-semibold text-center w-32 bg-slate-100">Akcje</th>
+                                </tr>
+                            </thead>
+                            <tbody id="search-results-body" class="text-sm divide-y divide-slate-100 bg-white">
+                                <!-- Rows inserted via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div id="search-empty" class="hidden flex flex-col items-center justify-center py-16 px-4 text-center bg-slate-50/50 rounded-xl border border-slate-200 border-dashed">
+                    <div class="bg-slate-100 p-3 rounded-full mb-3">
+                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <h3 class="text-slate-700 font-semibold mb-1">Brak wyników</h3>
+                    <p class="text-slate-500 text-sm max-w-sm">Nie znaleźliśmy żadnych historycznych kursów pasujących do Twoich kryteriów zapytania. Spróbuj zmienić filtry.</p>
+                </div>
+            </div>
+
+            <!-- Tab Content: Station Board -->
+            <div id="content-board" class="flex-grow p-5 sm:p-8 relative bg-slate-50/20">
+                <form id="board-form" class="flex flex-col gap-4 mb-8 max-w-5xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="md:col-span-1">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">Nazwa stacji</label>
+                            <input type="text" id="board-station" placeholder="np. Warszawa Centralna" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 bg-slate-50 hover:bg-white pl-4 pr-10 py-2.5 text-slate-900 outline-none border transition-colors">
+                        </div>
+                        <div class="md:col-span-1">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">Data (historyczna)</label>
+                            <input type="text" id="board-date" placeholder="Wybierz datę..." class="w-full rounded-xl border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 bg-slate-50 hover:bg-white px-4 py-2.5 text-slate-900 outline-none border transition-colors cursor-pointer">
+                        </div>
+                        <div class="md:col-span-1">
+                            <label class="block text-sm font-semibold text-slate-700 mb-1.5 ml-1">Godzina</label>
+                            <input type="time" id="board-time" value="00:00" class="w-full rounded-xl border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 focus:ring-2 focus:bg-white bg-slate-50 hover:bg-white px-4 py-2.5 text-slate-900 outline-none border transition-all cursor-text">
+                        </div>
+                        <div class="md:col-span-1 flex items-end">
+                            <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-[1px] transition-all active:scale-[0.98] flex justify-center items-center h-[46px]">
+                                Wyświetl tablicę
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Wybór tablicy (Przyjazdy / Odjazdy) -->
+                    <div class="flex items-center gap-6 mt-1 ml-1 border-t border-slate-100/80 pt-4">
+                        <span class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Typ tablicy:</span>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="board-type" value="departures" checked class="w-4.5 h-4.5 text-slate-800 focus:ring-slate-800 cursor-pointer border-slate-300">
+                            <span class="text-sm font-medium text-slate-700">Odjazdy</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="board-type" value="arrivals" class="w-4.5 h-4.5 text-slate-800 focus:ring-slate-800 cursor-pointer border-slate-300">
+                            <span class="text-sm font-medium text-slate-700">Przyjazdy</span>
+                        </label>
+                    </div>
+                </form>
+
+                <div id="board-loading" class="hidden absolute inset-0 z-[60] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center pt-10">
+                    <div class="loader mb-4 border-slate-800 border-t-transparent"></div>
+                    <p class="text-slate-600 font-medium text-center">Pobieranie historii stacji...</p>
+                </div>
+
+                <div id="board-error" class="hidden mb-6 p-4 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm max-w-4xl mx-auto font-medium flex items-center gap-3">
+                    <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                    <span id="board-error-text"></span>
+                </div>
+
+                <div id="board-results-container" class="hidden max-w-5xl mx-auto overflow-hidden rounded-xl border border-[#002B5B] shadow-xl bg-[#002B5B]">
+                    <!-- Header PKP Blue style -->
+                    <div class="bg-[#002B5B] text-white p-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#00529B]">
+                        <div class="flex flex-col">
+                            <h3 class="text-3xl font-bold tracking-wider text-white" id="board-title-station">Stacja: </h3>
+                            <p class="text-white/80 text-sm mt-0.5 mb-2" id="board-title-date">Data: </p>
+                            <div class="flex items-baseline gap-4 mt-1 text-yellow-400">
+                                <span class="text-2xl font-bold tracking-wide" id="board-title-type-pl">ODJAZDY</span>
+                                <span class="text-lg italic font-normal text-yellow-500/80 lowercase" id="board-title-type-en">Departures</span>
+                            </div>
+                        </div>
+                        <div class="shrink-0 mr-2 sm:mr-6 flex items-center justify-center">
+                            <canvas id="station-clock" width="100" height="100" class="rounded-full bg-white border-2 border-slate-300"></canvas>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px]">
+                            <thead class="sticky top-0 z-20">
+                                <tr class="bg-[#002B5B] border-b-2 border-slate-300 text-yellow-400 text-[12px] uppercase">
+                                    <th class="py-2.5 px-4 font-bold align-top w-28">
+                                        Czas<div class="text-[10px] font-normal italic text-yellow-500/80 normal-case leading-tight mt-0.5" id="board-col-time-en">Time</div>
+                                    </th>
+                                    <th class="py-2.5 px-4 font-bold align-top w-28">
+                                        Pociąg<div class="text-[10px] font-normal italic text-yellow-500/80 normal-case leading-tight mt-0.5">Train</div>
+                                    </th>
+                                    <th class="py-2.5 px-4 font-bold align-top w-1/3" id="board-col-direction">
+                                        Do<div class="text-[10px] font-normal italic text-yellow-500/80 normal-case leading-tight mt-0.5" id="board-col-dir-en">Destination</div>
+                                    </th>
+                                    <th class="py-2.5 px-4 font-bold align-top bg-[#002B5B]">
+                                        Uwagi<div class="text-[10px] font-normal italic text-yellow-500/80 normal-case leading-tight mt-0.5">Remarks</div>
+                                    </th>
+                                    <th class="py-2.5 px-4 font-bold align-top text-center w-36">
+                                        Szczegóły<div class="text-[10px] font-normal italic text-yellow-500/80 normal-case leading-tight mt-0.5">Details</div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="board-results-body" class="text-sm divide-y divide-slate-100">
+                                <!-- Rows inserted via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="board-empty" class="hidden flex flex-col items-center justify-center py-16 px-4 text-center bg-slate-50/50 rounded-xl border border-slate-200 border-dashed max-w-4xl mx-auto">
+                     <div class="bg-slate-100 p-3 rounded-full mb-3">
+                        <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                    </div>
+                    <h3 class="text-slate-700 font-semibold mb-1">Brak danych</h3>
+                    <p class="text-slate-500 text-sm">Nie znaleźliśmy pociągów dla tej stacji. Sprawdź, czy poprawnie wpisałeś jej nazwę.</p>
+                </div>
+            </div>
+
+            <!-- Train Detail Modal Overlay -->
+            <div id="detail-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 opacity-0 pointer-events-none transition-all duration-300" style="background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px);">
+                <div class="bg-white rounded-2xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] w-full max-w-4xl max-h-[95vh] flex flex-col transform scale-95 transition-transform duration-300 border border-slate-200" id="detail-modal-content">
+                    
+                    <div class="flex justify-between items-start sm:items-center p-5 sm:p-6 border-b border-slate-100 bg-white rounded-t-2xl relative z-10">
+                        <div class="pr-8">
+                            <h2 class="text-xl sm:text-2xl font-black text-slate-900 flex flex-wrap items-center gap-2 mb-1.5" id="detail-title-container">
+                                <span id="detail-title">Szczegóły trasy</span>
+                                <span id="detail-badge" class="hidden px-2.5 py-1 rounded-full text-xs font-bold leading-none shadow-sm ml-2"></span>
+                            </h2>
+                            <p id="detail-subtitle" class="text-sm font-medium text-slate-500"></p>
+                        </div>
+                        <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-700 transition-colors bg-slate-50 hover:bg-slate-100 p-2 rounded-full absolute top-5 right-5 sm:relative sm:top-0 sm:right-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+
+                    <div id="detail-body" class="p-0 overflow-y-auto flex-grow bg-slate-50 relative">
+                        <div id="detail-loading" class="absolute inset-0 z-[60] bg-slate-50/90 flex flex-col items-center justify-center pt-10">
+                            <div class="loader mb-4 border-slate-600 border-t-transparent"></div>
+                            <p class="text-slate-600 font-medium text-center">Pobieranie historii przystanków...</p>
+                        </div>
+
+                        <div id="detail-error" class="hidden m-6 p-4 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-medium flex items-center gap-3">
+                             <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+                             <span id="detail-error-text"></span>
+                        </div>
+
+                        <div id="detail-content" class="hidden p-5 sm:p-8">
+                            <!-- Timeline container -->
+                            <div class="relative border-l-2 border-slate-200 ml-4 lg:ml-12 space-y-6 sm:space-y-8" id="stops-timeline">
+                                <!-- Stops injected here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-100 p-4 border-t border-slate-200 rounded-b-2xl text-center text-xs text-slate-500 font-medium">
+                        Pełne dane i powody utrudnień dostarczane na bazie informacji z Portalu Pasażera
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-slate-200 bg-white">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-slate-500 text-sm font-medium text-center md:text-left">
+                &copy; <span id="currentYear"></span> Spoznienia.me
+            </div>
+            <div class="flex gap-6 text-sm font-semibold">
+                <a href="api/" class="text-blue-600 hover:text-blue-800 transition">Dokumentacja API</a>
+                <a href="https://github.com/marekk13/PKP-Intercity-Train-Delay-Scraper" target="_blank" class="text-slate-600 hover:text-slate-900 transition">GitHub</a>
+                <button onclick="copyEmail(this)" class="text-slate-600 hover:text-blue-600 transition focus:outline-none flex items-center gap-1.5" title="Skopiuj e-mail: marekkos37@gmail.com">
+                    <span>Kontakt</span>
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Background Gradient Decoration -->
+    <div class="fixed inset-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div class="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-blue-100/40 blur-[120px]"></div>
+        <div class="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-100/40 blur-[120px]"></div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        
+        function copyEmail(btn) {
+            navigator.clipboard.writeText('marekkos37@gmail.com').then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = `<span class="text-emerald-600 font-bold flex items-center gap-1 min-w-max"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg> <span class="${btn.closest('#top-navbar') ? 'hidden sm:inline' : ''}">Skopiowano</span></span>`;
+                setTimeout(() => btn.innerHTML = originalHtml, 3000);
+            }).catch(err => {
+                console.error('Nie udało się skopiować emaila: ', err);
+                window.location.href = 'mailto:marekkos37@gmail.com';
+            });
+        }
+        
+        // Define Base API URL
+        const API_BASE = 'https://api.spoznienia.me';
+
+        /**
+         * fetchWithRetry — automatyczne ponowne próby przy błędach 5xx lub sieciowych.
+         * Kluczowe dla obsługi cold-startu Render free tier, gdzie pierwszy request
+         * podczas budzenia może dostać 502/503 zanim FastAPI zdąży wystartować.
+         *
+         * @param {string|URL} url
+         * @param {object} opts         — opcje fetch
+         * @param {number} maxRetries   — max liczba ponowień (domyślnie 4)
+         * @param {number} retryDelayMs — odstęp między próbami w ms (domyślnie 3000)
+         * @param {function} onRetry    — callback(attempt, maxRetries) wywoływany przed retry
+         */
+        async function fetchWithRetry(url, opts = {}, maxRetries = 4, retryDelayMs = 3000, onRetry = null) {
+            let lastErr;
+            for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+                try {
+                    const res = await fetch(url, opts);
+                    // Tylko 5xx to błąd przejściowy (cold start); 4xx to błąd logiczny — nie retry
+                    if (res.status >= 500) {
+                        lastErr = { type: 'http', status: res.status };
+                        console.warn(`[fetchWithRetry] Attempt ${attempt}/${maxRetries+1} -> HTTP ${res.status} for ${url}`);
+                        if (attempt <= maxRetries) {
+                            if (onRetry) onRetry(attempt, maxRetries);
+                            await new Promise(r => setTimeout(r, retryDelayMs));
+                            continue;
+                        }
+                        // Wyczerpano retry — rzuć czytelny błąd
+                        throw new Error(`Nie udało się połączyć z serwerem po ${maxRetries} próbach (HTTP ${res.status}). Serwer może się właśnie budzić - spróbuj za chwilę.`);
+                    }
+                    return res; // sukces lub 4xx (nie retry)
+                } catch (err) {
+                    if (err.message && err.message.startsWith('Nie udało się połączyć')) throw err; // własny błąd z pętli
+                    // Błąd sieciowy (timeout, CORS podczas init, brak połączenia)
+                    lastErr = { type: 'network', err };
+                    console.warn(`[fetchWithRetry] Attempt ${attempt}/${maxRetries+1} -> Network error for ${url}:`, err.message);
+                    if (attempt <= maxRetries) {
+                        if (onRetry) onRetry(attempt, maxRetries);
+                        await new Promise(r => setTimeout(r, retryDelayMs));
+                        continue;
+                    }
+                    throw new Error(`Błąd połączenia z serwerem po ${maxRetries} próbach. Serwer może się wybudzać (potrzeba ok. 50s) lub wystąpił problem z siecią.`);
+                }
+            }
+        }
+
+        // Setup Dates & Flatpickr
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        
+        // Dni do zablokowania
+        const gapDates = ['2026-03-03', '2026-03-18', '2026-03-19', '2026-03-20', '2026-03-29'];
+
+        const flatpickrConfig = {
+            locale: "pl",
+            minDate: "2025-10-23", // Zablokowanie lat poniżej 2025 i dat przed 23 października
+            maxDate: yesterdayStr,
+            defaultDate: yesterdayStr,
+            disable: gapDates,
+            dateFormat: "Y-m-d",
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+                // Konwersja czasu na strefę lokalną na wypadek przesunięć żeby poprawnie odczytać datę YYYY-MM-DD z obiektu JS Date
+                const localDate = new Date(dayElem.dateObj.getTime() - (dayElem.dateObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+                if (gapDates.includes(localDate)) {
+                    dayElem.title = "Luka w danych - skrypt nie pobrał danych w tym dniu.";
+                }
+            },
+            onReady: function(selectedDates, dateStr, instance) {
+                // Własny selector miesięcy ala dropdown stacji
+                const monthSelect = instance.monthElements[0];
+                if (monthSelect) {
+                    monthSelect.style.display = 'none';
+
+                    const btnMiesiac = document.createElement('div');
+                    btnMiesiac.className = 'cursor-pointer px-3 py-1 flex items-center font-medium bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-700 transition mx-1 border border-transparent hover:border-slate-200 select-none';
+                    
+                    const spanNazwa = document.createElement('span');
+                    spanNazwa.className = 'text-[15px] mr-1 inline-block min-w-[70px] text-center whitespace-nowrap'; // fix cut off
+                    spanNazwa.textContent = instance.l10n.months.longhand[instance.currentMonth];
+                    
+                    const arrow = document.createElement('div');
+                    arrow.className = 'text-slate-400 transition-transform flex items-center justify-center';
+                    arrow.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                    
+                    btnMiesiac.appendChild(spanNazwa);
+                    btnMiesiac.appendChild(arrow);
+                    monthSelect.parentNode.insertBefore(btnMiesiac, monthSelect);
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'relative text-left w-0 h-0 z-[100]';
+                    monthSelect.parentNode.insertBefore(wrapper, monthSelect);
+
+                    const list = document.createElement('ul');
+                    list.className = 'absolute z-50 mt-2 bg-white border border-slate-200 shadow-xl rounded-xl max-h-[260px] overflow-y-auto hidden w-44 -left-20 top-2 text-base text-left';
+                    wrapper.appendChild(list);
+
+                    let isOpen = false;
+
+                    function toggleList(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if(isOpen) {
+                            list.classList.add('hidden');
+                            arrow.style.transform = 'rotate(0deg)';
+                            btnMiesiac.classList.remove('bg-blue-50', 'border-slate-200', 'text-blue-700');
+                        } else {
+                            renderList();
+                            list.classList.remove('hidden');
+                            arrow.style.transform = 'rotate(180deg)';
+                            btnMiesiac.classList.add('bg-blue-50', 'border-slate-200', 'text-blue-700');
+                            
+                            // Skroll do aktywnego
+                            setTimeout(() => {
+                                const activeItem = list.querySelector('.text-blue-700');
+                                if(activeItem) activeItem.scrollIntoView({block: 'nearest'});
+                            }, 10);
+                        }
+                        isOpen = !isOpen;
+                    }
+
+                    function renderList() {
+                        list.innerHTML = '';
+                        instance.l10n.months.longhand.forEach((m, idx) => {
+                            const li = document.createElement('li');
+                            li.className = 'px-4 py-2 cursor-pointer text-sm transition-colors border-b border-slate-50 last:border-b-0 flex justify-between items-center';
+                            
+                            if (instance.currentMonth === idx) {
+                                li.classList.add('bg-blue-50', 'text-blue-700', 'font-semibold');
+                            } else {
+                                li.classList.add('text-slate-700', 'hover:bg-blue-50', 'font-medium');
+                            }
+                            
+                            li.textContent = m;
+                            
+                            li.addEventListener('mousedown', (e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                instance.changeMonth(idx, false);
+                                toggleList(e);
+                            });
+                            list.appendChild(li);
+                        });
+                    }
+
+                    btnMiesiac.addEventListener('mousedown', toggleList);
+
+                    document.addEventListener('mousedown', (e) => {
+                        if (isOpen && !wrapper.contains(e.target) && !btnMiesiac.contains(e.target)) {
+                            list.classList.add('hidden');
+                            arrow.style.transform = 'rotate(0deg)';
+                            btnMiesiac.classList.remove('bg-blue-50', 'border-slate-200', 'text-blue-700');
+                            isOpen = false;
+                        }
+                    });
+
+                    // Save ref to span to update it dynamically
+                    instance.customMonthSpan = spanNazwa;
+                }
+            },
+            onMonthChange: function(selectedDates, dateStr, instance) {
+                if(instance.customMonthSpan) {
+                    instance.customMonthSpan.textContent = instance.l10n.months.longhand[instance.currentMonth];
+                }
+            },
+            onYearChange: function(selectedDates, dateStr, instance) {
+                if(instance.customMonthSpan) {
+                    instance.customMonthSpan.textContent = instance.l10n.months.longhand[instance.currentMonth];
+                }
+            }
+        };
+
+        flatpickr("#search-date", flatpickrConfig);
+        flatpickr("#board-date", flatpickrConfig);
+
+        // Baza stacji — wczytywana z misc/stations.json przy każdym otwarciu strony.
+        let validStations = [];
+
+        // Funkcja tworząca customowy dropdown
+        function buildCustomAutocomplete(inputId) {
+            const input = document.getElementById(inputId);
+            input.setAttribute('autocomplete', 'off');
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'relative w-full';
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+
+            const arrow = document.createElement('div');
+            arrow.className = 'absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-slate-600 transition-transform p-1 select-none';
+            arrow.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+            wrapper.appendChild(arrow);
+
+            const dropdown = document.createElement('ul');
+            dropdown.className = 'absolute z-50 w-full mt-1 bg-white border border-slate-200 shadow-xl rounded-xl max-h-60 overflow-y-auto hidden text-left';
+            wrapper.appendChild(dropdown);
+
+            let isOpen = false;
+            let listItems = [];
+            let selectedIndex = -1;
+            let skipAutoOpen = false;
+
+            function updateHighlight() {
+                listItems.forEach((item, index) => {
+                    if (index === selectedIndex) {
+                        item.node.classList.add('bg-blue-100', 'text-blue-900');
+                        item.node.classList.remove('hover:bg-blue-50', 'text-slate-700');
+                        item.node.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        item.node.classList.remove('bg-blue-100', 'text-blue-900');
+                        item.node.classList.add('hover:bg-blue-50', 'text-slate-700');
+                    }
+                });
+            }
+
+            function renderList(filter = '') {
+                dropdown.innerHTML = '';
+                listItems = [];
+                selectedIndex = -1;
+                
+                const filterNorm = removePolishDiacritics(filter.toLowerCase());
+                
+                const filtered = validStations.filter(s => removePolishDiacritics(s.toLowerCase()).includes(filterNorm));
+                
+                if (filtered.length === 0) {
+                    const li = document.createElement('li');
+                    li.className = 'px-4 py-3 text-slate-500 text-sm italic';
+                    li.textContent = 'Brak wyników';
+                    dropdown.appendChild(li);
+                } else {
+                    filtered.forEach((s, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-slate-700 transition-colors border-b border-slate-50 last:border-b-0';
+                        
+                        li.addEventListener('mouseenter', () => {
+                            selectedIndex = index;
+                            updateHighlight();
+                        });
+
+                        if (filter) {
+                            const sNorm = removePolishDiacritics(s.toLowerCase());
+                            const matchIndex = sNorm.indexOf(filterNorm);
+                            if (matchIndex > -1) {
+                                const before = s.substring(0, matchIndex);
+                                const matchText = s.substring(matchIndex, matchIndex + filterNorm.length);
+                                const after = s.substring(matchIndex + filterNorm.length);
+                                li.innerHTML = before + '<span class="font-bold text-blue-600">' + matchText + '</span>' + after;
+                            } else {
+                                li.textContent = s;
+                            }
+                        } else {
+                            li.textContent = s;
+                        }
+
+                        li.addEventListener('mousedown', (e) => {
+                            e.preventDefault(); 
+                            input.value = s;
+                            skipAutoOpen = true;
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            closeDropdown();
+                        });
+                        dropdown.appendChild(li);
+                        listItems.push({ node: li, value: s });
+                    });
+                    
+                    // Domyślnie podświetlamy pierwszy element listy by Enter go natychmiast wybierał
+                    selectedIndex = 0;
+                    updateHighlight();
+                }
+            }
+
+            function openDropdown() {
+                isOpen = true;
+                renderList(input.value);
+                dropdown.classList.remove('hidden');
+                arrow.style.transform = 'translateY(-50%) rotate(180deg)';
+                arrow.classList.add('text-blue-500');
+            }
+
+            function closeDropdown() {
+                isOpen = false;
+                dropdown.classList.add('hidden');
+                arrow.style.transform = 'translateY(-50%) rotate(0deg)';
+                arrow.classList.remove('text-blue-500');
+            }
+
+            let blurTimeout;
+
+            arrow.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // Zapobiega zaznaczaniu tekstu (double-click bug)
+                e.stopPropagation();
+                if (isOpen) {
+                    closeDropdown();
+                } else {
+                    input.blur();
+                    clearTimeout(blurTimeout);
+                    openDropdown();
+                }
+            });
+
+            arrow.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            input.addEventListener('input', () => {
+                if (skipAutoOpen) {
+                    skipAutoOpen = false;
+                    return;
+                }
+                if (!isOpen) openDropdown();
+                renderList(input.value);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (!isOpen) {
+                    // Otwieranie opcji przy użyciu strzałek, gdy lista nie jest aktywna
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        openDropdown();
+                    }
+                    return;
+                }
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (selectedIndex < listItems.length - 1) {
+                        selectedIndex++;
+                        updateHighlight();
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (selectedIndex > 0) {
+                        selectedIndex--;
+                        updateHighlight();
+                    }
+                } else if (e.key === 'Enter') {
+                    if (listItems.length > 0) {
+                        // Zablokuj submission pod spodem, bo wybieramy z listy
+                        e.preventDefault();
+                        const idx = selectedIndex >= 0 ? selectedIndex : 0;
+                        input.value = listItems[idx].value;
+                        skipAutoOpen = true;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        closeDropdown();
+                    } else {
+                        closeDropdown();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeDropdown();
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                blurTimeout = setTimeout(closeDropdown, 150);
+            });
+
+            document.addEventListener('mousedown', (e) => {
+                if(!wrapper.contains(e.target) && isOpen) {
+                    closeDropdown();
+                }
+            });
+        }
+        
+        fetch('misc/stations.json')
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { validStations = data; })
+            .catch(() => {})
+            .finally(() => {
+                buildCustomAutocomplete('search-station');
+                buildCustomAutocomplete('board-station');
+            });
+
+        // Custom zapętlony Time Picker wg ustalonego designu
+        function buildCustomTimePicker(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = 'text'; // Tekst by przejac kontrole
+            input.setAttribute('autocomplete', 'off');
+            input.maxLength = 5;
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'relative w-full';
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+
+            const icon = document.createElement('div');
+            icon.className = 'absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-slate-600 transition-colors p-1 bg-transparent select-none';
+            icon.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            wrapper.appendChild(icon);
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'absolute z-50 w-auto min-w-[140px] mt-1 bg-white border border-slate-200 shadow-xl rounded-xl hidden flex-row justify-center p-2 gap-2 origin-top left-0';
+            dropdown.addEventListener('mousedown', e => {
+                e.stopPropagation();
+                e.preventDefault(); // 防止失去焦点 context loss
+            });
+            wrapper.appendChild(dropdown);
+
+            let isOpen = false;
+            let currentSelection = 'hours'; // 'hours' or 'minutes'
+            let typingStep = 0;
+
+            function formatTime(h, m) {
+                return h.padStart(2, '0') + ':' + m.padStart(2, '0');
+            }
+
+            function syncDrums() {
+                if(!isOpen) return;
+                const parts = input.value.split(':');
+                const h = parts[0] || '00';
+                const m = parts[1] || '00';
+                drumH.centerOn(h, true);
+                drumM.centerOn(m, true);
+            }
+
+            function createDrum(min, max, isHours) {
+                const container = document.createElement('div');
+                container.className = 'w-16 flex flex-col items-center relative';
+                
+                const title = document.createElement('div');
+                title.className = 'text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest transition-colors';
+                title.textContent = isHours ? 'Godz.' : 'Min.';
+                container.appendChild(title);
+
+                const drumWrapper = document.createElement('div');
+                drumWrapper.className = 'relative w-full h-[200px] border border-slate-100 bg-slate-50/50 rounded-lg overflow-hidden shadow-inner transition-all duration-200';
+                
+                drumWrapper.addEventListener('mouseenter', () => {
+                    if (isHours && currentSelection !== 'hours') selectHours();
+                    else if (!isHours && currentSelection !== 'minutes') selectMinutes();
+                });
+                drumWrapper.addEventListener('touchstart', () => {
+                    if (isHours && currentSelection !== 'hours') selectHours();
+                    else if (!isHours && currentSelection !== 'minutes') selectMinutes();
+                }, {passive: true});
+
+                const highlight = document.createElement('div');
+                highlight.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-8px)] h-[40px] bg-white border border-blue-200 shadow-sm rounded-md pointer-events-none z-0';
+                drumWrapper.appendChild(highlight);
+
+                const ul = document.createElement('ul');
+                ul.className = 'absolute inset-0 overflow-y-auto no-scrollbar snap-y snap-mandatory scroll-smooth z-10';
+                
+                const items = [];
+                for(let i=min; i<=max; i++) {
+                    items.push(i.toString().padStart(2, '0'));
+                }
+                
+                // Repetycja 3x by ukryć końce i stworzyć efekt zapętlonego bębna (infinite loop)
+                const allItems = [...items, ...items, ...items];
+                
+                allItems.forEach((val) => {
+                    const li = document.createElement('li');
+                    li.className = 'h-[40px] flex items-center justify-center text-lg font-semibold text-slate-500 snap-center cursor-pointer transition-colors mx-1 rounded-md hover:bg-slate-100/50';
+                    li.textContent = val;
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        const parts = input.value.split(':');
+                        if(!parts[0]) parts[0] = '00';
+                        if(!parts[1]) parts[1] = '00';
+                        
+                        if(isHours) {
+                            parts[0] = val;
+                            input.value = parts[0] + ':' + parts[1];
+                            centerOn(val, true, li); 
+                            selectMinutes(); // Update selection & drum focus visually
+                        } else {
+                            parts[1] = val;
+                            input.value = parts[0] + ':' + parts[1];
+                            centerOn(val, true, li); 
+                            selectMinutes(); // Update selection & drum focus visually
+                            
+                            setTimeout(() => {
+                                closePicker();
+                                input.blur();
+                            }, 150);
+                        }
+                    });
+                    ul.appendChild(li);
+                });
+                
+                let isScrolling = false;
+                
+                ul.addEventListener('scroll', () => {
+                    if (isScrolling || !ul.offsetParent) return;
+                    const itemHeight = 40;
+                    const listHeight = items.length * itemHeight;
+                    
+                    if (ul.scrollTop <= itemHeight) {
+                        isScrolling = true;
+                        ul.style.scrollBehavior = 'auto';
+                        ul.scrollTop += listHeight;
+                        setTimeout(() => {
+                            ul.style.scrollBehavior = 'smooth';
+                            isScrolling = false;
+                        }, 20);
+                    } else if (ul.scrollTop >= listHeight * 2 - itemHeight * 2) {
+                        isScrolling = true;
+                        ul.style.scrollBehavior = 'auto';
+                        ul.scrollTop -= listHeight;
+                        setTimeout(() => {
+                            ul.style.scrollBehavior = 'smooth';
+                            isScrolling = false;
+                        }, 20);
+                    }
+
+                    // Auto-select środkowego elementu (jak natywny picker)
+                    clearTimeout(ul.snapTimeout);
+                    ul.snapTimeout = setTimeout(() => {
+                        if (!ul.offsetParent) return; // Zapobiegamy wyłapywaniu ukrytych menu podczas przejścia
+                        const idx = Math.floor((ul.scrollTop + (ul.clientHeight / 2)) / 40);
+                        if(idx >= 0 && idx < allItems.length) {
+                            const val = allItems[idx];
+                            const parts = input.value.split(':');
+                            if(!parts[0]) parts[0] = '00';
+                            if(!parts[1]) parts[1] = '00';
+                            
+                            let changed = false;
+                            if(isHours && parts[0] !== val) { parts[0] = val; changed = true; }
+                            else if(!isHours && parts[1] !== val) { parts[1] = val; changed = true; }
+                            
+                            if (changed) {
+                                input.value = parts[0] + ':' + parts[1];
+                                if(document.activeElement === input) {
+                                    if(currentSelection === 'hours') input.setSelectionRange(0, 2);
+                                    else input.setSelectionRange(3, 5);
+                                }
+                            }
+                            
+                            Array.from(ul.children).forEach((child, i) => {
+                                if (i === idx) {
+                                    child.classList.add('text-blue-600', 'font-bold');
+                                    child.classList.remove('text-slate-500');
+                                } else {
+                                    child.classList.remove('text-blue-600', 'font-bold');
+                                    child.classList.add('text-slate-500');
+                                }
+                            });
+                        }
+                    }, 100);
+                });
+                
+                ul.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    if (isScrolling) return;
+                    let diff = e.deltaY > 0 ? 1 : -1;
+                    // For touchpads with small delta, require a minimum threshold to avoid crazy jumping, or just use sign.
+                    // A typical mouse wheel scroll step is 100+. Touchpads can be 1, 2, 3...
+                    if (Math.abs(e.deltaY) < 10) return; // ignore tiny touchpad jitters if we force 40px steps
+                    ul.style.scrollBehavior = 'smooth';
+                    ul.scrollTop += diff * 40;
+                }, {passive: false});
+                
+                drumWrapper.appendChild(ul);
+                container.appendChild(drumWrapper);
+
+                function centerOn(val, smooth = true, targetLi = null) {
+                    ul.style.scrollBehavior = smooth ? 'smooth' : 'auto';
+                    let offsetTop;
+                    if (targetLi) {
+                        offsetTop = targetLi.offsetTop;
+                    } else {
+                        const idx = items.length + items.indexOf(val);
+                        offsetTop = idx * 40;
+                    }
+                    ul.scrollTop = offsetTop - (ul.clientHeight / 2) + 20;
+                    
+                    setTimeout(() => {
+                        const targetIdx = Math.floor((ul.scrollTop + (ul.clientHeight / 2)) / 40);
+                        Array.from(ul.children).forEach((child, i) => {
+                            if (i === targetIdx) {
+                                child.classList.add('text-blue-600', 'font-bold');
+                                child.classList.remove('text-slate-500');
+                            } else {
+                                child.classList.remove('text-blue-600', 'font-bold');
+                                child.classList.add('text-slate-500');
+                            }
+                        });
+                    }, 50);
+                }
+
+                return { container, centerOn, wrapper: drumWrapper, title };
+            }
+
+            const drumH = createDrum(0, 23, true);
+            const drumM = createDrum(0, 59, false);
+
+            function updateDrumFocus() {
+                if (currentSelection === 'hours') {
+                    drumH.wrapper.classList.add('ring-2', 'ring-blue-400', 'border-transparent');
+                    drumM.wrapper.classList.remove('ring-2', 'ring-blue-400', 'border-transparent');
+                    drumH.title.classList.add('text-blue-600');
+                    drumH.title.classList.remove('text-slate-400');
+                    drumM.title.classList.remove('text-blue-600');
+                    drumM.title.classList.add('text-slate-400');
+                    drumM.wrapper.classList.add('opacity-70', 'scale-95');
+                    drumH.wrapper.classList.remove('opacity-70', 'scale-95');
+                } else {
+                    drumM.wrapper.classList.add('ring-2', 'ring-blue-400', 'border-transparent');
+                    drumH.wrapper.classList.remove('ring-2', 'ring-blue-400', 'border-transparent');
+                    drumM.title.classList.add('text-blue-600');
+                    drumM.title.classList.remove('text-slate-400');
+                    drumH.title.classList.remove('text-blue-600');
+                    drumH.title.classList.add('text-slate-400');
+                    drumH.wrapper.classList.add('opacity-70', 'scale-95');
+                    drumM.wrapper.classList.remove('opacity-70', 'scale-95');
+                }
+            }
+
+            function selectHours() {
+                currentSelection = 'hours';
+                typingStep = 0;
+                input.setSelectionRange(0, 2);
+                updateDrumFocus();
+            }
+
+            function selectMinutes() {
+                currentSelection = 'minutes';
+                typingStep = 0;
+                input.setSelectionRange(3, 5);
+                updateDrumFocus();
+            }
+
+            function openPicker() {
+                dropdown.innerHTML = '';
+                dropdown.appendChild(drumH.container);
+                dropdown.appendChild(drumM.container);
+                
+                dropdown.classList.remove('hidden');
+                dropdown.classList.add('flex');
+                isOpen = true;
+
+                const parts = input.value.split(':');
+                if(!parts[0]) parts[0] = '00';
+                if(!parts[1]) parts[1] = '00';
+
+                // Przewiń i ustaw focus wizualny
+                setTimeout(() => {
+                    drumH.centerOn(parts[0], false);
+                    drumM.centerOn(parts[1], false);
+                    updateDrumFocus();
+                }, 10);
+                
+                icon.classList.add('text-blue-500');
+                wrapper.classList.add('z-50');
+            }
+
+            function closePicker() {
+                isOpen = false;
+                dropdown.classList.add('hidden');
+                dropdown.classList.remove('flex');
+                icon.classList.remove('text-blue-500');
+                wrapper.classList.remove('z-50');
+            }
+
+            input.addEventListener('click', (e) => {
+                if (!isOpen) {
+                    openPicker();
+                }
+                const rect = input.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                if (clickX <= 45) {
+                    selectHours();
+                } else {
+                    selectMinutes();
+                }
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    if (currentSelection === 'hours' && !e.shiftKey) {
+                        e.preventDefault();
+                        selectMinutes();
+                    } else if (currentSelection === 'minutes' && e.shiftKey) {
+                        e.preventDefault();
+                        selectHours();
+                    } else {
+                        if (isOpen) closePicker(); // Let it tab away 
+                    }
+                    return;
+                }
+                
+                if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                    if (e.key === 'ArrowLeft') selectHours();
+                    else selectMinutes();
+                    return;
+                }
+
+                if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+                    e.preventDefault();
+                    let parts = input.value.split(':');
+                    let h = parseInt(parts[0] || '0', 10);
+                    let m = parseInt(parts[1] || '0', 10);
+                    let diff = e.key === 'ArrowUp' ? -1 : 1;
+                    
+                    if (currentSelection === 'hours') {
+                        h = (h + diff + 24) % 24;
+                        parts[0] = h.toString().padStart(2, '0');
+                        input.value = parts[0] + ':' + parts[1];
+                        selectHours();
+                    } else {
+                        m = (m + diff + 60) % 60;
+                        parts[1] = m.toString().padStart(2, '0');
+                        input.value = parts[0] + ':' + parts[1];
+                        selectMinutes();
+                    }
+                    syncDrums();
+                    return;
+                }
+
+                if (e.key >= '0' && e.key <= '9') {
+                    e.preventDefault();
+                    let parts = input.value.split(':');
+                    if (parts.length !== 2) parts = ['00', '00'];
+                    let numStr = e.key;
+                    let num = parseInt(numStr, 10);
+                    
+                    if (currentSelection === 'hours') {
+                        if (typingStep === 0) {
+                            if (num > 2) {
+                                parts[0] = '0' + numStr;
+                                input.value = parts[0] + ':' + parts[1];
+                                syncDrums();
+                                selectMinutes();
+                            } else {
+                                parts[0] = numStr + '0';
+                                input.value = parts[0] + ':' + parts[1];
+                                syncDrums();
+                                typingStep = 1;
+                                input.setSelectionRange(0, 2);
+                            }
+                        } else {
+                            let newH = parseInt(parts[0][0] + numStr, 10);
+                            if (newH > 23) newH = 23;
+                            parts[0] = newH.toString().padStart(2, '0');
+                            typingStep = 0;
+                            input.value = parts[0] + ':' + parts[1];
+                            syncDrums();
+                            selectMinutes();
+                        }
+                    } else {
+                        if (typingStep === 0) {
+                            if (num > 5) {
+                                parts[1] = '0' + numStr;
+                                input.value = parts[0] + ':' + parts[1];
+                                syncDrums();
+                                selectMinutes();
+                                if (isOpen) { closePicker(); input.blur(); }
+                            } else {
+                                parts[1] = numStr + '0';
+                                input.value = parts[0] + ':' + parts[1];
+                                syncDrums();
+                                typingStep = 1;
+                                input.setSelectionRange(3, 5);
+                            }
+                        } else {
+                            let newM = parseInt(parts[1][0] + numStr, 10);
+                            parts[1] = newM.toString().padStart(2, '0');
+                            typingStep = 0;
+                            input.value = parts[0] + ':' + parts[1];
+                            syncDrums();
+                            if (isOpen) { closePicker(); input.blur(); }
+                        }
+                    }
+                    return;
+                }
+
+                if (e.key === 'Backspace' || e.key === 'Delete') {
+                    e.preventDefault();
+                    typingStep = 0;
+                    let parts = input.value.split(':');
+                    if (currentSelection === 'hours') {
+                        parts[0] = '00';
+                        input.value = parts[0] + ':' + parts[1];
+                        selectHours();
+                    } else {
+                        parts[1] = '00';
+                        input.value = parts[0] + ':' + parts[1];
+                        selectMinutes();
+                    }
+                    syncDrums();
+                    return;
+                }
+
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    if (isOpen) {
+                        e.preventDefault(); 
+                        closePicker();
+                        input.blur();
+                        return;
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        return;
+                    }
+                    return;
+                }
+
+                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                }
+            });
+
+            input.addEventListener('blur', () => {
+                if(isOpen) closePicker();
+            });
+
+            icon.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if(isOpen) closePicker();
+                else {
+                    input.focus();
+                    openPicker();
+                    selectHours();
+                }
+            });
+
+            icon.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            document.addEventListener('mousedown', (e) => {
+                if(!wrapper.contains(e.target) && isOpen) {
+                    closePicker();
+                }
+            });
+        }
+
+        buildCustomTimePicker('board-time');
+        
+        // Tab function
+        function switchTab(tab) {
+            const tabs = ['search', 'board'];
+            tabs.forEach(t => {
+                const contentEl = document.getElementById(`content-${t}`);
+                const btnEl = document.getElementById(`tab-${t}`);
+                if (t === tab) {
+                    contentEl.classList.remove('hidden');
+                    btnEl.classList.add('tab-active');
+                    btnEl.classList.remove('tab-inactive');
+                } else {
+                    contentEl.classList.add('hidden');
+                    btnEl.classList.remove('tab-active');
+                    btnEl.classList.add('tab-inactive');
+                }
+            });
+        }
+
+        // Helper: clean station names from unnecessary PKP suffixes
+        function cleanStationName(name) {
+            if (!name) return '-';
+            return name.replace(/\s+Osobow[ya]$/i, '').trim();
+        }
+
+        // Helper: remove polish diacritics for searching
+        function removePolishDiacritics(str) {
+            if (!str) return '';
+            const map = {'ą':'a','ć':'c','ę':'e','ł':'l','ń':'n','ó':'o','ś':'s','ź':'z','ż':'z','Ą':'A','Ć':'C','Ę':'E','Ł':'L','Ń':'N','Ó':'O','Ś':'S','Ź':'Z','Ż':'Z'};
+            return str.replace(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g, m => map[m]);
+        }
+
+        // Helper: format delay minutes
+        function getDelayStyling(delay, isDeparture = false) {
+            if (delay === null || delay === undefined) return { class: 'text-[11px] text-slate-400 font-bold uppercase tracking-wider', text: 'Brak danych', raw: 0 };
+            if (delay === 0) return { class: 'text-emerald-600 font-medium', text: 'Rozkładowo', raw: 0 };
+            if (delay > 20) return { class: 'text-red-600 font-bold', text: `+${delay} min`, raw: delay };
+            if (delay > 5) return { class: 'text-amber-600 font-bold', text: `+${delay} min`, raw: delay };
+            return { class: 'text-emerald-600 font-medium', text: `+${delay} min`, raw: delay };
+        }
+
+        // Search Train View Logic
+        document.getElementById('search-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (document.activeElement) document.activeElement.blur();
+            const date = document.getElementById('search-date').value;
+            const number = document.getElementById('search-number').value.trim();
+            const station = document.getElementById('search-station').value.trim();
+
+            const loading = document.getElementById('search-loading');
+            const errorContainer = document.getElementById('search-error');
+            const errorText = document.getElementById('search-error-text');
+            const container = document.getElementById('search-results-container');
+            const empty = document.getElementById('search-empty');
+            const tbody = document.getElementById('search-results-body');
+            
+            let mappedSearchStation = station;
+            if (station) {
+                const searchNorm = removePolishDiacritics(station.toLowerCase());
+                const matchingStation = validStations.find(s => removePolishDiacritics(s.toLowerCase()) === searchNorm);
+                if (!matchingStation) {
+                    empty.classList.add('hidden');
+                    container.classList.add('hidden');
+                    errorText.textContent = 'Nieznana stacja. Wpisz i wybierz z listy pełną poprawną stację bazową (bez dopisków typu "Osobowa").';
+                    errorContainer.classList.remove('hidden');
+                    return;
+                }
+                mappedSearchStation = matchingStation;
+            }
+
+            loading.classList.remove('hidden');
+            errorContainer.classList.add('hidden');
+            container.classList.add('hidden');
+            empty.classList.add('hidden');
+            tbody.innerHTML = '';
+            
+            const loadingText = loading.querySelector('p');
+            loadingText.innerHTML = "Wyszukiwanie historycznych połączeń...";
+
+            // Komunikat o cold-starcie pojawia się po 8s bez odpowiedzi
+            let loadTimeout = setTimeout(() => {
+                loadingText.innerHTML = "Wyszukiwanie historycznych połączeń...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer jest w darmowym planie. Jeśli nie był używany przez 15 minut, wybudzenie może potrwać do 50 sekund. Automatycznie ponawiamy próbę — prosimy o cierpliwość.</span>";
+            }, 8000);
+
+            try {
+                let url = new URL(`${API_BASE}/train-runs`);
+                if (date) url.searchParams.append('date', date);
+                if (number) url.searchParams.append('number', number);
+                if (mappedSearchStation) url.searchParams.append('station', mappedSearchStation);
+
+                const res = await fetchWithRetry(
+                    url, {}, 4, 3000,
+                    (attempt, max) => {
+                        loadingText.innerHTML = `Wyszukiwanie historycznych połączeń...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer się budzi — ponowna próba ${attempt}/${max}... (może potrwać do 50s)</span>`;
+                    }
+                );
+                if (!res.ok) {
+                    throw new Error('Nieoczekiwany błąd serwera. Spróbuj ponownie.');
+                }
+                
+                let data = await res.json();
+                
+                // --- Filtrowanie wyników bez danych opóźnień (ZKA etc.) ---
+                const hideNoData = document.getElementById('filter-no-data').checked;
+                if (hideNoData) {
+                    data = data.filter(train => train.delay_at_destination !== null && train.delay_at_destination !== undefined);
+                }
+
+                clearTimeout(loadTimeout);
+                loading.classList.add('hidden');
+                
+                if (data.length === 0) {
+                    empty.classList.remove('hidden');
+                } else {
+                    container.classList.remove('hidden');
+                    data.forEach(train => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-blue-50/40 transition-colors group cursor-pointer";
+                        tr.onclick = (event) => {
+                            if(!event.target.closest('button')) openDetailModal(train.id);
+                        };
+
+                        const d = getDelayStyling(train.delay_at_destination);
+
+                        tr.innerHTML = `
+                            <td class="py-4 px-5 align-middle">
+                                <div class="font-bold text-slate-800 text-base">${train.category || ''} ${train.number}</div>
+                                ${train.name && !train.name.includes('-') ? `<div class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">${train.name}</div>` : ''}
+                            </td>
+                            <td class="py-4 px-5 align-middle text-slate-700 font-medium">${cleanStationName(train.from_station)}</td>
+                            <td class="py-4 px-5 align-middle text-slate-700 font-medium">
+                                ${cleanStationName(train.to_station)}
+                                <div class="text-xs text-slate-400 mt-0.5">Planowo: ${train.scheduled_arrival ? train.scheduled_arrival.substring(0,5) : '-'}</div>
+                            </td>
+                            <td class="py-4 px-5 align-middle text-right">
+                                <span class="${d.class} bg-slate-50 px-2 py-1 rounded inline-block">${d.text}</span>
+                            </td>
+                            <td class="py-4 px-5 align-middle text-center">
+                                <button onclick="openDetailModal('${train.id}')" class="text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-600 hover:text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all shadow-sm">
+                                    Szczegóły
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                clearTimeout(loadTimeout);
+                loading.classList.add('hidden');
+                errorText.textContent = err.message;
+                errorContainer.classList.remove('hidden');
+            }
+        });
+
+        // Board View Logic
+        // Zegar stacyjny logic
+        function drawStationClock(timeString) {
+            const canvas = document.getElementById('station-clock');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const radius = canvas.width / 2;
+            
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.translate(radius, radius);
+            
+            ctx.beginPath();
+            ctx.arc(0, 0, radius - 2, 0, 2 * Math.PI);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            for (let num = 1; num <= 60; num++) {
+                const ang = num * Math.PI / 30;
+                const isHour = num % 5 === 0;
+                
+                ctx.save();
+                ctx.rotate(ang);
+                ctx.translate(0, -radius + 4);
+                
+                if (isHour) {
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(-1.5, 0, 3, 7);
+                    
+                    const hourNum = (num / 5);
+                    ctx.translate(0, 14);
+                    ctx.rotate(-ang);
+                    ctx.font = 'bold 12px Arial';
+                    ctx.fillStyle = '#222';
+                    ctx.fillText(hourNum.toString(), 0, 0);
+                    ctx.rotate(ang);
+                    ctx.translate(0, -14);
+                } else {
+                    ctx.fillStyle = '#666';
+                    ctx.fillRect(-0.5, 0, 1, 4);
+                }
+                ctx.restore();
+            }
+            
+            let [hours, minutes] = timeString.split(':').map(Number);
+            if (isNaN(hours)) hours = 0;
+            if (isNaN(minutes)) minutes = 0;
+            
+            hours = hours % 12;
+            const hourAng = (hours * Math.PI / 6) + (minutes * Math.PI / (6 * 60));
+            const minAng = (minutes * Math.PI / 30);
+            
+            ctx.save();
+            ctx.rotate(hourAng);
+            ctx.beginPath();
+            // Hour hand (tapered)
+            ctx.moveTo(-3, 8);
+            ctx.lineTo(3, 8);
+            ctx.lineTo(2, -radius * 0.45);
+            ctx.lineTo(0, -radius * 0.55); // Tip
+            ctx.lineTo(-2, -radius * 0.45);
+            ctx.closePath();
+            ctx.fillStyle = '#111';
+            ctx.fill();
+            ctx.restore();
+            
+            ctx.save();
+            ctx.rotate(minAng);
+            ctx.beginPath();
+            // Minute hand (tapered)
+            ctx.moveTo(-2.5, 8);
+            ctx.lineTo(2.5, 8);
+            ctx.lineTo(1.5, -radius * 0.65);
+            ctx.lineTo(0, -radius * 0.75); // Tip
+            ctx.lineTo(-1.5, -radius * 0.65);
+            ctx.closePath();
+            ctx.fillStyle = '#111';
+            ctx.fill();
+            ctx.restore();
+            
+
+            
+            // Srodek zegara (czarna ośka na samej górze przymocowująca wskazówki)
+            ctx.beginPath();
+            ctx.arc(0, 0, 4.5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#111';
+            ctx.fill();
+        }
+
+        document.getElementById('board-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (document.activeElement) document.activeElement.blur();
+            let station = document.getElementById('board-station').value.trim();
+            const date = document.getElementById('board-date').value;
+            const timeStr = document.getElementById('board-time').value || "00:00";
+            const boardType = document.querySelector('input[name="board-type"]:checked').value; // 'departures' or 'arrivals'
+
+            if (!station) {
+                document.getElementById('board-empty').classList.add('hidden');
+                document.getElementById('board-results-container').classList.add('hidden');
+                document.getElementById('board-error-text').textContent = 'Proszę wpisać nazwę stacji, aby wyświetlić tablicę historyczną.';
+                document.getElementById('board-error').classList.remove('hidden');
+                return;
+            }
+            
+            let mappedStation = station;
+            const searchNorm = removePolishDiacritics(station.toLowerCase());
+            const matchingStation = validStations.find(s => removePolishDiacritics(s.toLowerCase()) === searchNorm);
+            
+            if (!matchingStation) {
+                document.getElementById('board-empty').classList.add('hidden');
+                document.getElementById('board-results-container').classList.add('hidden');
+                document.getElementById('board-error-text').textContent = 'Nieznana stacja. Wybierz stację z automatycznej listy podpowiedzi, sprawdzając, czy ma poprawne polskie znaki.';
+                document.getElementById('board-error').classList.remove('hidden');
+                return;
+            } else {
+                mappedStation = matchingStation;
+            }
+
+            const loading = document.getElementById('board-loading');
+            const errorContainer = document.getElementById('board-error');
+            const errorText = document.getElementById('board-error-text');
+            const container = document.getElementById('board-results-container');
+            const empty = document.getElementById('board-empty');
+            const tbody = document.getElementById('board-results-body');
+
+            // Ustawienia etykiet nagłówków na podstawie rodzaju tablicy
+            const directionCol = document.getElementById('board-col-direction');
+            const directionColEn = document.getElementById('board-col-dir-en');
+            const titleTypePl = document.getElementById('board-title-type-pl');
+            const titleTypeEn = document.getElementById('board-title-type-en');
+            
+            if (boardType === 'arrivals') {
+                directionCol.childNodes[0].nodeValue = "Z";
+                directionColEn.textContent = "From";
+                if(titleTypePl) titleTypePl.textContent = "PRZYJAZDY";
+                if(titleTypeEn) titleTypeEn.textContent = "arrivals";
+            } else {
+                directionCol.childNodes[0].nodeValue = "Do";
+                directionColEn.textContent = "Destination";
+                if(titleTypePl) titleTypePl.textContent = "ODJAZDY";
+                if(titleTypeEn) titleTypeEn.textContent = "departures";
+            }
+
+            loading.classList.remove('hidden');
+            errorContainer.classList.add('hidden');
+            container.classList.add('hidden');
+            empty.classList.add('hidden');
+            tbody.innerHTML = '';
+            
+            const loadingText = loading.querySelector('p');
+            loadingText.innerHTML = "Pobieranie historii stacji...";
+
+            // Komunikat o cold-starcie pojawia się po 8s
+            let loadTimeout = setTimeout(() => {
+                loadingText.innerHTML = "Pobieranie historii stacji...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer jest w darmowym planie. Jeśli nie był używany przez 15 minut, wybudzenie może potrwać do 50 sekund. Automatycznie ponawiamy próbę.</span>";
+            }, 8000);
+            
+            document.getElementById('board-title-station').textContent = `${mappedStation.toUpperCase()}`;
+            document.getElementById('board-title-date').textContent = `${date || yesterdayStr}`;
+
+            try {
+                let url = new URL(`${API_BASE}/stations/${encodeURIComponent(mappedStation)}/schedule`);
+                if (date) url.searchParams.append('date', date);
+
+                const res = await fetchWithRetry(
+                    url, {}, 4, 3000,
+                    (attempt, max) => {
+                        loadingText.innerHTML = `Pobieranie historii stacji...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer się budzi — ponowna próba ${attempt}/${max}... (max ~50s)</span>`;
+                    }
+                );
+                if (!res.ok) {
+                    if (res.status === 404) throw new Error('Brak danych dla takiej stacji. Upewnij się, że wpisujesz poprawną nazwę (bez polskich znaków na końcu typu "Osobowa" itp).');
+                    else throw new Error('Nieoczekiwany błąd serwera. Spróbuj powtórzyć zapytanie.');
+                }
+                
+                let data = await res.json();
+                
+                const hasAnyDailyTrains = data.length > 0;
+                
+                // PKP boards filter out things without scheduled times for the specific board
+                // and sort them chronologically
+                if (boardType === 'arrivals') {
+                    data = data.filter(i => i.scheduled_arrival && i.scheduled_arrival >= timeStr);
+                    data.sort((a,b) => a.scheduled_arrival.localeCompare(b.scheduled_arrival));
+                } else {
+                    data = data.filter(i => i.scheduled_departure && i.scheduled_departure >= timeStr);
+                    data.sort((a,b) => a.scheduled_departure.localeCompare(b.scheduled_departure));
+                }
+
+                drawStationClock(timeStr);
+
+                clearTimeout(loadTimeout);
+                loading.classList.add('hidden');
+                
+                if (data.length === 0) {
+                    empty.classList.remove('hidden');
+                    const emptyTitle = empty.querySelector('h3');
+                    const emptyDesc = empty.querySelector('p');
+                    
+                    if (hasAnyDailyTrains) {
+                        emptyTitle.textContent = 'Brak połączeń po ' + timeStr;
+                        emptyDesc.textContent = `Od podanej godziny nie ma już więcej pociągów na tej stacji do końca dnia. Spróbuj wybrać wcześniejszą porę.`;
+                    } else {
+                        emptyTitle.textContent = 'Brak danych';
+                        emptyDesc.textContent = 'Nie znaleźliśmy pociągów dla tej stacji. Sprawdź, czy wpisałeś pełną poprawną nazwę ze znakami polskimi (np. Warszawa Wschodnia, Poznań Główny).';
+                    }
+                } else {
+                    container.classList.remove('hidden');
+                    data.forEach(item => {
+                        const tr = document.createElement('tr');
+                        // Jaśniejszy granat z delikatnym białym podziałem zamiast ciemnej przerwy
+                        tr.className = "hover:bg-[#2267AC] bg-[#2A7BC6] transition-colors border-b border-white/30 text-white";
+                        
+                        let timeStr = '';
+                        let delayMin = null;
+                        if (boardType === 'arrivals') {
+                            timeStr = item.scheduled_arrival ? item.scheduled_arrival.substring(0,5) : '-';
+                            delayMin = item.delay_arrival_min;
+                        } else {
+                            timeStr = item.scheduled_departure ? item.scheduled_departure.substring(0,5) : '-';
+                            delayMin = item.delay_departure_min;
+                        }
+
+                        // Opóźnienie / Uwagi box 
+                        let delayHtml = `<span class="opacity-30">-</span>`; 
+                        if (delayMin !== null && delayMin !== undefined) {
+                            if (delayMin > 0) {
+                                 delayHtml = `<span class="bg-white text-red-600 font-bold px-1.5 py-[2px] rounded-sm shadow-sm whitespace-nowrap">+${delayMin} min opóźnienia</span>`;
+                            } else if (delayMin === 0) {
+                                 delayHtml = `<span class="bg-white text-emerald-600 font-bold px-1.5 py-[2px] rounded-sm shadow-sm whitespace-nowrap">Planowo</span>`;
+                            }
+                        }
+
+                        // Train numer formatting (Biały kwadrat, czcionka bez pogrubienia, na max szerokość napisu)
+                        const trainHtml = `${item.train_category || ''} ${item.train_number}`;
+                        
+                        // Z / Do logic
+                        let originOrDest = boardType === 'arrivals' ? (item.from_station || item.direction) : (item.to_station || item.direction);
+
+                        tr.innerHTML = `
+                            <td class="py-2.5 px-4 align-middle font-bold text-lg w-28 tracking-wide">${timeStr}</td>
+                            <td class="bg-white text-[#004B87] py-2.5 px-3 align-middle font-normal tracking-wide text-[16px] w-32 border-x border-white">${trainHtml}</td>
+                            <td class="py-2.5 px-4 align-middle font-bold text-[15px] truncate tracking-wide">${cleanStationName(originOrDest)}</td>
+                            <td class="py-2.5 px-4 align-middle leading-none">${delayHtml}</td>
+                            <td class="py-2.5 px-4 align-middle text-center w-36">
+                                <button onclick="openDetailModal('${item.train_id}')" class="text-white hover:text-yellow-400 border border-transparent hover:border-yellow-400 bg-white/10 hover:bg-white/20 transition-all text-sm px-3 py-1 font-semibold outline-none rounded-lg inline-flex items-center justify-center gap-1.5 w-full whitespace-nowrap" title="Pokaż trasę">
+                                    Pokaż trasę
+                                </button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                clearTimeout(loadTimeout);
+                loading.classList.add('hidden');
+                errorText.textContent = err.message;
+                errorContainer.classList.remove('hidden');
+            }
+        });
+
+        // Detail Modal Logic
+        const modal = document.getElementById('detail-modal');
+        const modalContent = document.getElementById('detail-modal-content');
+
+        function formatTime(t) {
+            if (!t) return '-';
+            return t.substring(0,5);
+        }
+
+        async function openDetailModal(trainId) {
+            // Ukrycie górnego panelu nawigacji
+            const navbar = document.getElementById('top-navbar');
+            if (navbar) {
+                navbar.classList.add('-translate-y-full', 'opacity-0', 'pointer-events-none');
+            }
+
+            // Show modal
+            modal.classList.remove('pointer-events-none', 'opacity-0');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+            }, 10);
+            
+            // Reset modal state
+            document.getElementById('detail-title').textContent = "Szczegóły trasy";
+            document.getElementById('detail-subtitle').innerHTML = "Wczytywanie historii... (" + trainId + ")";
+            document.getElementById('detail-badge').classList.add('hidden');
+            
+            const detailLoading = document.getElementById('detail-loading');
+            const detailLoadingText = detailLoading.querySelector('p');
+            detailLoadingText.innerHTML = "Pobieranie historii przystanków...";
+
+            detailLoading.classList.remove('hidden');
+            document.getElementById('detail-error').classList.add('hidden');
+            document.getElementById('detail-content').classList.add('hidden');
+            
+            const timeline = document.getElementById('stops-timeline');
+            timeline.innerHTML = '';
+
+            // Komunikat o cold-starcie po 8s
+            let loadTimeout = setTimeout(() => {
+                document.getElementById('detail-subtitle').innerHTML = "Wczytywanie historii... (" + trainId + ") <div class='inline-block w-3.5 h-3.5 ml-1.5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin align-middle'></div><br><span class='text-xs text-slate-500 mt-1.5 block'>Wybudzanie serwera — automatyczne retry...</span>";
+                detailLoadingText.innerHTML = "Pobieranie historii przystanków...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer się budzi. Automatycznie ponawiamy próbę (max ~50s).</span>";
+            }, 8000);
+
+            try {
+                const res = await fetchWithRetry(
+                    `${API_BASE}/train-runs/${trainId}`, {}, 4, 3000,
+                    (attempt, max) => {
+                        detailLoadingText.innerHTML = `Pobieranie historii przystanków...<br><span class='text-sm mt-3 block text-slate-500 max-w-sm text-center px-4 font-normal'>Serwer się budzi — ponowna próba ${attempt}/${max}...</span>`;
+                    }
+                );
+                if (!res.ok) {
+                    if (res.status >= 500) throw new Error('Serwer tymczasowo niedostępny po kilku próbach. Odśwież stronę i spróbuj ponownie.');
+                    else throw new Error('Nie udało się pobrać szczegółowej trasy dla tego pociągu.');
+                }
+                
+                const data = await res.json();
+                
+                // Header Populating
+                const displayName = (data.name && !data.name.includes('-')) ? ` "${data.name}"` : '';
+                document.getElementById('detail-title').textContent = `${data.category || ''} ${data.number}${displayName}`.trim();
+                const cleanFrom = cleanStationName(data.from_station);
+                const cleanTo = cleanStationName(data.to_station);
+                document.getElementById('detail-subtitle').textContent = `Data odjazdu: ${data.date} | Relacja: ${cleanFrom !== '-' ? cleanFrom : 'Nieznana'} → ${cleanTo !== '-' ? cleanTo : 'Nieznana'}`;
+                
+                if (data.delay_at_destination !== null) {
+                    const badge = document.getElementById('detail-badge');
+                    badge.classList.remove('hidden');
+                    badge.textContent = `Opóźnienie na mecie: ${data.delay_at_destination} min`;
+                    if (data.delay_at_destination > 20) {
+                        badge.className = "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-red-100 text-red-700 shadow-sm ml-3";
+                    } else if (data.delay_at_destination > 5) {
+                        badge.className = "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 shadow-sm ml-3";
+                    } else {
+                        badge.className = "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 shadow-sm ml-3";
+                        badge.textContent = "Rozkładowo";
+                    }
+                }
+
+                // Night Train Warning Detection
+                const detailContent = document.getElementById('detail-content');
+                // Usuń poprzednie ostrzeżenia jeśli istnieją
+                const oldWarning = detailContent.querySelector('.night-train-warning');
+                if (oldWarning) oldWarning.remove();
+
+                if (data.scheduled_departure && data.scheduled_arrival && data.scheduled_arrival < data.scheduled_departure) {
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = "night-train-warning mb-6 p-4 rounded-xl bg-purple-50 border border-purple-100 flex items-start gap-3 shadow-sm";
+                    warningDiv.innerHTML = `
+                        <div class="mt-0.5 p-1 bg-purple-100 text-purple-600 rounded-md shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                        </div>
+                        <div class="text-sm">
+                            <strong class="block text-purple-900 mb-0.5">Uwaga: Pociąg nocny</strong>
+                            <p class="text-purple-800/80 leading-relaxed font-medium">To połączenie kończy bieg następnego dnia. Dane o opóźnieniach po godzinie 00:00 mogą być niedostępne lub błędne ze względu na reset systemu u źródła (Portal Pasażera).</p>
+                        </div>
+                    `;
+                    detailContent.prepend(warningDiv);
+                }
+
+                // Timeline Populating
+                if (data.stops && data.stops.length > 0) {
+                    data.stops.forEach((stop, idx) => {
+                        const isFirst = idx === 0;
+                        const isLast = idx === data.stops.length - 1;
+                        
+                        const maxDelay = Math.max(stop.delay_minutes_arrival || 0, stop.delay_minutes_departure || 0);
+                        
+                        let dotColor = 'bg-blue-500 ring-blue-100 border-white';
+                        if (maxDelay > 20) dotColor = 'bg-red-500 ring-red-100 border-white shadow-[0_0_10px_rgba(239,68,68,0.5)]';
+                        else if (maxDelay > 5) dotColor = 'bg-amber-400 ring-amber-100 border-white';
+                        else if (maxDelay > 0) dotColor = 'bg-emerald-400 ring-emerald-100 border-white';
+
+                        // Arrival and Departure Blocks
+                        const arrDelay = getDelayStyling(stop.delay_minutes_arrival);
+                        const depDelay = getDelayStyling(stop.delay_minutes_departure);
+
+                        let difficultiesHtml = '';
+                        if (stop.difficulties && stop.difficulties.length > 0) {
+                            const diffList = stop.difficulties.map(d => {
+                                const desc = typeof d === 'string' ? d : d.description;
+                                const loc = (typeof d === 'object' && d.location) ? ` (Lokalizacja: ${d.location})` : '';
+                                return `<li class="flex items-start gap-1.5"><svg class="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg><span class="text-sm font-medium text-red-800">${desc}${loc}</span></li>`;
+                            }).join('');
+                            difficultiesHtml = `<ul class="mt-3 space-y-1.5 bg-red-50 px-3 py-2 rounded-lg border border-red-100/50">${diffList}</ul>`;
+                        }
+
+                        // Style for First/Last stops
+                        let blockClass = "bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/60 hover:shadow-md transition-shadow relative overflow-hidden group";
+                        if (isFirst || isLast) {
+                            blockClass = "bg-slate-50 p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow relative overflow-hidden group";
+                        }
+
+                        const markup = `
+                            <div class="relative pl-6 sm:pl-10">
+                                <!-- Linking Line (if not last) -->
+                                ${!isLast ? `<div class="absolute left-[-2px] sm:left-[-2px] top-6 w-[2px] h-[calc(100%+32px)] bg-slate-200 group-hover:bg-slate-300 transition-colors z-0"></div>` : ''}
+
+                                <!-- Timeline Dot -->
+                                <div class="absolute left-[-9px] sm:left-[-9px] top-5 w-4 h-4 rounded-full border-2 ring-4 ${dotColor} z-10 transition-transform group-hover:scale-125 duration-200"></div>
+                                
+                                <div class="${blockClass}">
+                                    ${isFirst ? '<div class="absolute top-0 right-0 bg-blue-100 text-blue-700 text-[10px] font-bold uppercase px-3 py-1 rounded-bl-lg">Start</div>' : ''}
+                                    ${isLast ? '<div class="absolute top-0 right-0 bg-slate-200 text-slate-700 text-[10px] font-bold uppercase px-3 py-1 rounded-bl-lg">Koniec</div>' : ''}
+
+                                    <div class="flex justify-between items-start flex-wrap gap-2 mb-3 pr-12">
+                                        <h4 class="text-lg font-bold text-slate-800 flex items-center">
+                                            ${stop.station_name}
+                                        </h4>
+                                        <div class="text-[11px] font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200 font-semibold shadow-sm">
+                                            ${stop.distance_from_start_km !== null ? stop.distance_from_start_km + ' km' : '-'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4 max-w-sm">
+                                        <!-- Przyjazd -->
+                                        <div class="flex flex-col p-2.5 rounded-xl bg-slate-50/50 border border-slate-100">
+                                            <span class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Plan. Przyjazd</span>
+                                            <div class="flex justify-between items-baseline gap-2">
+                                                <span class="font-mono text-base font-bold text-slate-900">${formatTime(stop.arrival_time)}</span>
+                                                <span class="text-xs ${arrDelay.class}">${arrDelay.raw > 0 ? arrDelay.text : (stop.arrival_time ? arrDelay.text : '')}</span>
+                                            </div>
+                                        </div>
+                                        <!-- Odjazd -->
+                                        <div class="flex flex-col p-2.5 rounded-xl bg-slate-50/50 border border-slate-100">
+                                            <span class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Plan. Odjazd</span>
+                                            <div class="flex justify-between items-baseline gap-2">
+                                                <span class="font-mono text-base font-bold text-slate-900">${formatTime(stop.departure_time)}</span>
+                                                <span class="text-xs ${depDelay.class}">${depDelay.raw > 0 ? depDelay.text : (stop.departure_time ? depDelay.text : '')}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    ${difficultiesHtml}
+                                </div>
+                            </div>
+                        `;
+                        timeline.insertAdjacentHTML('beforeend', markup);
+                    });
+                } else {
+                    timeline.innerHTML = '<div class="text-slate-500 pl-6 text-center py-8">Brak zapisanych przystanków dla tej trasy.</div>';
+                }
+
+                clearTimeout(loadTimeout);
+                document.getElementById('detail-loading').classList.add('hidden');
+                document.getElementById('detail-content').classList.remove('hidden');
+
+            } catch(err) {
+                clearTimeout(loadTimeout);
+                document.getElementById('detail-loading').classList.add('hidden');
+                const errText = document.getElementById('detail-error-text');
+                errText.textContent = err.message;
+                document.getElementById('detail-error').classList.remove('hidden');
+            }
+        }
+
+        function closeDetailModal() {
+            // Pokazanie górnego panelu nawigacji
+            const navbar = document.getElementById('top-navbar');
+            if (navbar) {
+                navbar.classList.remove('-translate-y-full', 'opacity-0', 'pointer-events-none');
+            }
+
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            modal.classList.add('opacity-0');
+
+            setTimeout(() => {
+                modal.classList.add('pointer-events-none');
+            }, 300);
+        }
+
+        // Close modal on escape or background click
+        modal.addEventListener('click', (e) => {
+            if(e.target === modal) closeDetailModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'Escape' && !modal.classList.contains('pointer-events-none')) {
+                closeDetailModal();
+            }
+        });
+
+    </script>
+</body>
+</html>

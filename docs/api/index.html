@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spoznienia.me - API Opóźnień PKP Intercity</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%232563eb' rx='6'/%3E%3Cpath fill='white' d='M16 21l1.5-2.5h-11L8 21h8zM15 4H9C6 4 4 5.5 4 8v8a3 3 0 003 3h10a3 3 0 003-3V8c0-2.5-2-4-5-4z'/%3E%3Crect x='6' y='7' width='12' height='4' rx='1' fill='%232563eb'/%3E%3Ccircle cx='8.5' cy='14.5' r='1.5' fill='%232563eb'/%3E%3Ccircle cx='15.5' cy='14.5' r='1.5' fill='%232563eb'/%3E%3C/svg%3E" type="image/svg+xml">
+    <!-- Tailwind CSS (via CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        /* Lightweight syntax highlighting aesthetic */
+        pre {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+        .code-inline {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+        .method-get {
+            background-color: #10b981;
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: bold;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased text-base">
+
+    <!-- Navbar -->
+    <nav id="top-navbar" class="glass sticky top-0 z-50 transition-all duration-300">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo -->
+                <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+                    <div class="bg-blue-600 p-1.5 rounded-lg shadow-sm">
+                        <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M15 4H9C6 4 4 5.5 4 8v8a3 3 0 003 3h10a3 3 0 003-3V8c0-2.5-2-4-5-4z M6 7 h12 v4 h-12 z M8.5 13 a1.5 1.5 0 1 0 0 3 a1.5 1.5 0 1 0 0 -3 z M15.5 13 a1.5 1.5 0 1 0 0 3 a1.5 1.5 0 1 0 0 -3 z M16 21l1.5-2.5H6.5L8 21h8z"/>
+                        </svg>
+                    </div>
+                    <span class="font-extrabold text-xl tracking-tight text-slate-900">spoznienia<span class="text-blue-600">.me</span> <span class="bg-blue-100 text-blue-700 text-[10px] sm:text-xs font-bold uppercase px-2 py-0.5 rounded-md ml-1 tracking-wider">API</span></span>
+                </div>
+                <!-- Links -->
+                <div class="flex items-center gap-3 sm:gap-6">
+                    <a href="../" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors duration-200 flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                        <span class="hidden sm:inline">Aplikacja pasażera</span>
+                        <span class="sm:hidden">Wróć</span>
+                    </a>
+                    <a href="https://github.com/marekk13/PKP-Intercity-Train-Delay-Scraper" target="_blank" rel="noopener noreferrer" class="text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition shadow-sm flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
+                        <span class="hidden sm:inline">GitHub</span>
+                    </a>
+                    <button onclick="copyEmail(this)" class="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors duration-200 flex items-center gap-1.5 focus:outline-none" title="Skopiuj adres e-mail (marekkos37@gmail.com)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                        <span class="hidden sm:inline contact-text">Kontakt</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        
+        <!-- Hero Section -->
+        <header class="mb-16">
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">Dokumentacja API</h1>
+            <p class="text-xl text-gray-600 mb-8 max-w-3xl">
+                Otwarty dostęp do historycznej bazy danych opóźnień pociągów PKP Intercity w Polsce. Buduj na danych, które do tej pory nie były łatwo dostępne.
+            </p>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between">
+                <div class="mb-4 md:mb-0">
+                    <h3 class="font-bold text-blue-900 text-lg mb-1">Główny adres API (Base URL)</h3>
+                    <p class="text-blue-700 text-sm">Wszystkie żądania wykonuj do poniższego adresu:</p>
+                </div>
+                <div class="bg-white px-4 py-3 rounded border border-blue-200 text-blue-800 font-mono font-medium shadow-inner flex items-center gap-3">
+                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                    https://api.spoznienia.me
+                </div>
+            </div>
+        </header>
+
+        <!-- Context & About -->
+        <section class="mb-16 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                O projekcie
+            </h2>
+            <div class="prose prose-blue max-w-none text-gray-600">
+                <p class="mb-4">
+                    Powiadomienia o opóźnieniach na żywo są przydatne w trakcie podróży, ale brakowało ogólnodostępnej, historycznej bazy danych umożliwiającej analizy, tworzenie statystyk czy aplikacji analitycznych. Oficialne serwisy nie oferują przyjaznego API.
+                </p>
+                <p>
+                    <strong>Spoznienia.me</strong> rozwiązuje ten problem. Codziennie automatyczny proces pobiera pełne informacje o trasach pociągów i ich realnym czasie przyjazdu/odjazdu (oraz powodach opóźnień), archiwizując je w bazie danych. 
+                </p>
+            </div>
+        </section>
+
+        <!-- Limitations -->
+        <section class="mb-16 bg-white p-8 rounded-xl shadow-sm border border-amber-200 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                Znane ograniczenia bazy danych
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-gray-600 text-sm">
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-green-50 text-green-600 rounded-lg shrink-0 border border-green-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">Początek archiwum</strong>
+                        Baza gromadzi dane od <strong>23 października 2025 r.</strong>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-blue-50 text-blue-600 rounded-lg shrink-0 border border-blue-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">Cykl aktualizacji (t+1)</strong>
+                        Aplikacja przetwarza opóźnienia pod koniec dnia. Rzeczywiste dane z danego dnia pojawiają się w API dopiero w dniu następnym.
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-red-50 text-red-600 rounded-lg shrink-0 border border-red-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">Stacje początkowe</strong>
+                        Dla kursów do 23 marca 2026 r. algorytm nie rejestrował poprawnie opóźnień dla niektórych pierwszych stacji (w polach zwracany jest <code>null</code>).
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-amber-50 text-amber-600 rounded-lg shrink-0 border border-amber-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">Luki w dniach</strong>
+                        Brak danych dla: 3, 18, 19, 20 marca oraz 29 marca 2026 r. z uwagi na przerwy techniczne w działaniu scrapera.
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-slate-50 text-slate-600 rounded-lg shrink-0 border border-slate-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">ZKA i pociągi międzynarodowe</strong>
+                        Autobusy ZKA i pociągi z zagranicy nie figurują w bazie. Wynika to z braków śledzenia trasy na poziomie głównego dostawcy.
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="mt-0.5 p-1.5 bg-purple-50 text-purple-600 rounded-lg shrink-0 border border-purple-100"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg></div>
+                    <div>
+                        <strong class="block text-gray-900 text-base mb-1">Pociągi nocne</strong>
+                        Dla kursów trwających po północy, dane o opóźnieniach na odcinkach po godzinie 00:00 mogą być niekompletne lub wyzerowane ze względu na dobowy cykl resetowania danych w źródłowym portalu.
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+
+        <hr class="border-gray-200 mb-16">
+
+        <!-- Endpoints List -->
+        <h2 class="text-3xl font-bold text-gray-900 mb-8">Dostępne endpointy</h2>
+
+        <!-- Endpoint: List Trains -->
+        <div class="mb-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" id="endpoint-list-trains">
+            <div class="p-6 border-b border-gray-100 bg-gray-50 flex items-center flex-wrap gap-4">
+                <span class="method-get">GET</span>
+                <code class="text-lg font-bold text-gray-800">/train-runs</code>
+            </div>
+            <div class="p-6">
+                <p class="mb-4 text-gray-600">
+                    Pobiera listę skróconych informacji o kursach pociągów w danym dniu. Jest to przydatne do wyszukiwania danego pociągu przed pobraniem jego szczegółów.
+                </p>
+                
+                <h4 class="font-bold text-gray-900 mb-2">Parametry zapytania (Query Parameters):</h4>
+                <ul class="list-disc list-inside text-gray-600 mb-6 space-y-1">
+                    <li><span class="font-bold text-gray-800">date</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Data kursów w formacie <code class="code-inline">YYYY-MM-DD</code> (domyślnie wczoraj).</li>
+                    <li><span class="font-bold text-gray-800">number</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Numer pociągu (lub część, np. "5322").</li>
+                    <li><span class="font-bold text-gray-800">station</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Wyszukiwanie pociągów, których stacją początkową lub końcową jest dana fraza.</li>
+                    <li><span class="font-bold text-gray-800">offset</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Paginacja - przesunięcie (domyślnie 0).</li>
+                    <li><span class="font-bold text-gray-800">limit</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Paginacja - limit wyników (domyślnie 500).</li>
+                </ul>
+
+                <h4 class="font-bold text-gray-900 mb-2">Przykład użycia (cURL):</h4>
+<pre class="mb-6 text-sm"><code>curl -X 'GET' \
+  'https://api.spoznienia.me/train-runs?date=2026-02-17&station=zag%C3%B3rz' \
+  -H 'accept: application/json'</code></pre>
+
+                <h4 class="font-bold text-gray-900 mb-2">Fragment przykładowej odpowiedzi:</h4>
+<pre class="text-sm"><code>[
+  {
+    "id": "2026021733110",
+    "date": "2026-02-17",
+    "number": "33110",
+    "name": "Wetlina",
+    "category": "IC",
+    "from_station": "Zagórz",
+    "to_station": "Kraków Płaszów",
+    "is_domestic": true,
+    "occupancy": "Szacowana frekwencja w przedziale 50%-80%",
+    "scheduled_departure": "04:55:00",
+    "scheduled_arrival": "09:19:00",
+    "delay_at_destination": 6
+  },
+  {
+    "id": "2026021730112",
+    "date": "2026-02-17",
+    "number": "30112",
+    "name": "Bieszczady",
+    "category": "IC",
+    "from_station": "Kraków Główny",
+    "to_station": "Zagórz",
+    "is_domestic": true,
+    "occupancy": "Szacowana frekwencja w przedziale 50%-80%",
+    "scheduled_departure": "09:30:00",
+    "scheduled_arrival": "13:58:00",
+    "delay_at_destination": 0
+  }
+]</code></pre>
+                
+                <h4 class="font-bold text-gray-900 mb-3">Model danych:</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200 mb-6">
+                        <thead class="bg-slate-100 text-slate-700">
+                            <tr>
+                                <th class="p-3 border-b">Pole</th>
+                                <th class="p-3 border-b">Typ</th>
+                                <th class="p-3 border-b">Opis</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr><td class="p-3 font-mono font-bold">id</td><td class="p-3">string</td><td class="p-3">Unikalny identyfikator kursu (data + numer)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">date</td><td class="p-3">string</td><td class="p-3">Data kursu (YYYY-MM-DD)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">number</td><td class="p-3">string</td><td class="p-3">Numer pociągu</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">name</td><td class="p-3">string</td><td class="p-3">Nazwa pociągu</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">category</td><td class="p-3">string</td><td class="p-3">Kategoria (np. IC, EIP, TLK)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">from_station</td><td class="p-3">string</td><td class="p-3">Stacja początkowa całej trasy</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">to_station</td><td class="p-3">string</td><td class="p-3">Stacja końcowa całej trasy</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">is_domestic</td><td class="p-3">boolean</td><td class="p-3">Czy pociąg jest krajowy (true) czy międzynarodowy (false)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">occupancy</td><td class="p-3">string</td><td class="p-3">Przewidywana frekwencja (opcjonalnie)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">scheduled_departure</td><td class="p-3">string</td><td class="p-3">Planowy odjazd ze stacji początkowej (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">scheduled_arrival</td><td class="p-3">string</td><td class="p-3">Planowy przyjazd na stację końcową (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">delay_at_destination</td><td class="p-3">integer</td><td class="p-3">Opóźnienie na stacji końcowej (w minutach)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endpoint: Station Schedule -->
+        <div class="mb-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" id="endpoint-station-schedule">
+            <div class="p-6 border-b border-gray-100 bg-gray-50 flex items-center flex-wrap gap-4">
+                <span class="method-get">GET</span>
+                <code class="text-lg font-bold text-gray-800">/stations/{name}/schedule</code>
+            </div>
+            <div class="p-6">
+                <p class="mb-4 text-gray-600">
+                    Pobiera harmonogram (tablicę odjazdów i przyjazdów) dla konkretnej stacji w zadanym dniu. Pozwala sprawdzić punktualność pociągów zatrzymujących się na danej stacji, uwzględniając przystanki pośrednie.
+                </p>
+                
+                <h4 class="font-bold text-gray-900 mb-2">Parametry ścieżki i zapytania:</h4>
+                <ul class="list-disc list-inside text-gray-600 mb-6 space-y-1">
+                    <li><span class="font-bold text-gray-800">name</span> <span class="text-sm text-red-500">(wymagane w URL)</span>: Nazwa stacji (np. "Kluczbork", bez rozróżniania małych i wielkich liter).</li>
+                    <li><span class="font-bold text-gray-800">date</span> <span class="text-sm text-gray-500">(opcjonalnie)</span>: Data w formacie <code class="code-inline">YYYY-MM-DD</code> (domyślnie wczoraj).</li>
+                </ul>
+
+                <h4 class="font-bold text-gray-900 mb-2">Przykład użycia (Javascript Fetch API):</h4>
+<pre class="mb-6 text-sm"><code>fetch('https://api.spoznienia.me/stations/krosno/schedule?date=2026-01-07')
+  .then(response => response.json())
+  .then(data => console.log(data));</code></pre>
+
+                <h4 class="font-bold text-gray-900 mb-2">Fragment przykładowej odpowiedzi:</h4>
+<pre class="text-sm"><code>[
+  {
+    "train_number": "33110",
+    "train_category": "IC",
+    "from_station": "Zagórz",
+    "to_station": "Kraków Płaszów",
+    "scheduled_arrival": "06:09:00",
+    "scheduled_departure": "06:14:00",
+    "delay_arrival_min": 0,
+    "delay_departure_min": 10,
+    "is_delayed": true,
+    "train_id": "2026010733110"
+  },
+  {
+    "train_number": "30161",
+    "train_category": "TLK",
+    "from_station": "Kraków Główny",
+    "to_station": "Krosno",
+    "scheduled_arrival": "16:05:00",
+    "scheduled_departure": null,
+    "delay_arrival_min": 0,
+    "delay_departure_min": null,
+    "is_delayed": false,
+    "train_id": "2026010730161"
+  }
+]</code></pre>
+                
+                <h4 class="font-bold text-gray-900 mb-3">Model danych:</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200 mb-6">
+                        <thead class="bg-slate-100 text-slate-700">
+                            <tr>
+                                <th class="p-3 border-b">Pole</th>
+                                <th class="p-3 border-b">Typ</th>
+                                <th class="p-3 border-b">Opis</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr><td class="p-3 font-mono font-bold">train_number</td><td class="p-3">string</td><td class="p-3">Numer pociągu</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">train_category</td><td class="p-3">string</td><td class="p-3">Kategoria pociągu (np. IC, TLK)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">from_station</td><td class="p-3">string</td><td class="p-3">Stacja początkowa trasy</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">to_station</td><td class="p-3">string</td><td class="p-3">Stacja końcowa trasy</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">scheduled_arrival</td><td class="p-3">string</td><td class="p-3">Planowany czas przyjazdu na badaną stację (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">scheduled_departure</td><td class="p-3">string</td><td class="p-3">Planowany czas odjazdu z badanej stacji (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">delay_arrival_min</td><td class="p-3">integer</td><td class="p-3">Rzeczywiste opóźnienie przyjazdu (min)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">delay_departure_min</td><td class="p-3">integer</td><td class="p-3">Rzeczywiste opóźnienie odjazdu (min)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">is_delayed</td><td class="p-3">boolean</td><td class="p-3">Flagowa informacja czy pociąg jest opóźniony na tej stacji</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">train_id</td><td class="p-3">string</td><td class="p-3">Unikalny identyfikator pociągu w bazie</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Endpoint: Train Detail -->
+        <div class="mb-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" id="endpoint-train-detail">
+            <div class="p-6 border-b border-gray-100 bg-gray-50 flex items-center flex-wrap gap-4">
+                <span class="method-get">GET</span>
+                <code class="text-lg font-bold text-gray-800">/train-runs/{train_id}</code>
+            </div>
+            <div class="p-6">
+                <p class="mb-4 text-gray-600">
+                    Pobiera pełne dane o wybranym kursie pociągu (uzyskane m.in. z endpointu `/train-runs`), włączając w to bardzo szczegółową listę wszystkich przystanków, opóźnień na każdym z nich oraz zgłoszonych utrudnień (awarie, blokady trasy itp.).
+                </p>
+                
+                <h4 class="font-bold text-gray-900 mb-2">Parametry ścieżki i zapytania:</h4>
+                <ul class="list-disc list-inside text-gray-600 mb-6 space-y-1">
+                    <li><span class="font-bold text-gray-800">train_id</span> <span class="text-sm text-red-500">(wymagane w URL)</span>: Unikalny identyfikator pociągu. Zbudowany z ciągów (YYYYMMDD + nr pociągu np. <code class="code-inline">202603165322</code>).</li>
+                </ul>
+
+                <h4 class="font-bold text-gray-900 mb-2">Przykład użycia (cURL):</h4>
+<pre class="mb-6 text-sm"><code>curl -X 'GET' \
+  'https://api.spoznienia.me/train-runs/2026031233112' \
+  -H 'accept: application/json'</code></pre>
+
+                <h4 class="font-bold text-gray-900 mb-2">Fragment przykładowej odpowiedzi:</h4>
+<pre class="text-sm"><code>{
+  "id": "2026031233112",
+  "date": "2026-03-12",
+  "number": "33112",
+  "name": "Bieszczady",
+  "category": "IC",
+  "from_station": "Zagórz",
+  "to_station": "Kraków Główny",
+  "is_domestic": true,
+  "occupancy": "Szacowana frekwencja poniżej 50%",
+  "scheduled_departure": "14:50:00",
+  "scheduled_arrival": "19:21:00",
+  "delay_at_destination": 0,
+  "stops": [
+    {
+      "station_name": "Zagórz",
+      "stop_order": 1,
+      "arrival_time": null,
+      "departure_time": "14:50:00",
+      "delay_minutes_arrival": null,
+      "delay_minutes_departure": 0,
+      "distance_from_start_km": 0.0,
+      "difficulties": []
+    },
+    {
+      "station_name": "Krosno",
+      "stop_order": 4,
+      "arrival_time": "16:06:00",
+      "departure_time": "16:16:00",
+      "delay_minutes_arrival": 0,
+      "delay_minutes_departure": 7,
+      "distance_from_start_km": 46.1,
+      "difficulties": [
+        {
+          "description": "Oczekiwanie na skomunikowanie",
+          "location": null
+        }
+      ]
+    },
+    {
+      "station_name": "Kraków Główny",
+      "stop_order": 13,
+      "arrival_time": "19:21:00",
+      "departure_time": null,
+      "delay_minutes_arrival": 0,
+      "delay_minutes_departure": null,
+      "distance_from_start_km": 247.1,
+      "difficulties": []
+    }
+  ]
+}</code></pre>
+                
+                <h4 class="font-bold text-gray-900 mb-3">Model danych (Stops):</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left border-collapse bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
+                        <thead class="bg-slate-100 text-slate-700">
+                            <tr>
+                                <th class="p-3 border-b">Pole</th>
+                                <th class="p-3 border-b">Opis</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr><td class="p-3 font-mono font-bold">station_name</td><td class="p-3">Nazwa stacji pośredniej</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">stop_order</td><td class="p-3">Kolejność przystanku na trasie (od 1)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">arrival_time</td><td class="p-3">Planowy czas przyjazdu (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">departure_time</td><td class="p-3">Planowy czas odjazdu (HH:MM:SS)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">delay_minutes_arrival</td><td class="p-3">Opóźnienie przyjazdu (minuty)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">delay_minutes_departure</td><td class="p-3">Opóźnienie odjazdu (minuty)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">distance_from_start_km</td><td class="p-3">Dystans od stacji początkowej (km)</td></tr>
+                            <tr><td class="p-3 font-mono font-bold">difficulties</td><td class="p-3">Lista obiektów ze szczegółami utrudnienia (pola: <code>description</code>, <code>location</code>)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 py-10 text-center">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p class="mb-4">
+                Projekt oparty o otwarte oprogramowanie na licencji MIT.<br>
+                Zastrzeżenie: Narzędzie API służy do celów edukacyjnych i analitycznych. Wykorzystuj je odpowiedzialnie.
+            </p>
+            <p class="text-sm text-gray-500">
+                Odwiedź repozytorium na <a href="https://github.com/marekk13/PKP-Intercity-Train-Delay-Scraper" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white transition">GitHub</a>.
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        function copyEmail(btn) {
+            navigator.clipboard.writeText('marekkos37@gmail.com').then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = `<span class="text-emerald-600 font-bold flex items-center gap-1 min-w-max"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg> <span class="${btn.closest('#top-navbar') ? 'hidden sm:inline' : ''}">Skopiowano</span></span>`;
+                setTimeout(() => btn.innerHTML = originalHtml, 3000);
+            }).catch(err => {
+                console.error('Nie udało się skopiować emaila: ', err);
+                window.location.href = 'mailto:marekkos37@gmail.com';
+            });
+        }
+    </script>
+</body>
+</html>
