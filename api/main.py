@@ -123,6 +123,7 @@ class StopDetail(BaseModel):
     delay_minutes_arrival: Optional[int]
     delay_minutes_departure: Optional[int]
     distance_from_start_km: float
+    is_domestic: bool
     difficulties: List[dict] = []
 
 class TrainDetail(TrainSummary):
@@ -224,7 +225,7 @@ def get_train_detail(train_id: str, db: Client = Depends(get_db)):
     
     # 3. Get Stops
     stops_res = db.table("run_stops")\
-        .select("*, stations(name), run_stop_difficulties(*, difficulties(description))")\
+        .select("*, stations(name, is_domestic), run_stop_difficulties(*, difficulties(description))")\
         .eq("run_id", internal_id)\
         .order("stop_order")\
         .execute()
@@ -248,6 +249,7 @@ def get_train_detail(train_id: str, db: Client = Depends(get_db)):
             delay_minutes_arrival=s['delay_arrival_min'],
             delay_minutes_departure=s['delay_departure_min'],
             distance_from_start_km=s['distance_from_start_km'],
+            is_domestic=s['stations']['is_domestic'],
             difficulties=diffs
         ))
         

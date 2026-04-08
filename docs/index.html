@@ -2055,9 +2055,11 @@
                                         <h4 class="text-lg font-bold text-slate-800 flex items-center">
                                             ${stop.station_name}
                                         </h4>
+                                        ${stop.is_domestic && stop.distance_from_start_km !== null ? `
                                         <div class="text-[11px] font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200 font-semibold shadow-sm">
-                                            ${stop.distance_from_start_km !== null ? stop.distance_from_start_km + ' km' : '-'}
+                                            ${stop.distance_from_start_km} km
                                         </div>
+                                        ` : ''}
                                     </div>
                                     
                                     <div class="grid grid-cols-2 gap-4 max-w-sm">
