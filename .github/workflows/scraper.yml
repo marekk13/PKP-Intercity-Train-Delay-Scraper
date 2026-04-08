@@ -35,7 +35,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add misc/stations.json
+          git add docs/misc/stations.json
           if ! git diff --cached --quiet; then
             git commit -m "chore(stations): add newly discovered stations [skip ci]"
             git push

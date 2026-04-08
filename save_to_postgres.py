@@ -479,7 +479,7 @@ def _append_to_stations_json(new_stations: list, logger: logging.Logger):
     statyczny plik przez GitHub Pages — stanowi źródło prawdy dla validStations.
     """
     from pathlib import Path
-    stations_path = Path(__file__).parent / 'misc' / 'stations.json'
+    stations_path = Path(__file__).parent / 'docs' / 'misc' / 'stations.json'
 
     if not stations_path.exists():
         logger.warning(f"Nie znaleziono {stations_path} — pomijam aktualizację listy stacji.")
