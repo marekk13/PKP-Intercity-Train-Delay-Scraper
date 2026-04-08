@@ -7,3 +7,5 @@ uvicorn
 python-dotenv
 pydantic
 gunicorn
+slowapi
+fastapi-cache2

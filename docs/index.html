@@ -667,6 +667,10 @@
          * @param {function} onRetry    — callback(attempt, maxRetries) wywoływany przed retry
          */
         async function fetchWithRetry(url, opts = {}, maxRetries = 4, retryDelayMs = 3000, onRetry = null) {
+            // Priority header
+            opts.headers = opts.headers || {};
+            opts.headers['x-custom-client'] = 'spoznienia-frontend';
+            
             let lastErr;
             for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
                 try {

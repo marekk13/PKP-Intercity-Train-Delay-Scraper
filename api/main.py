@@ -8,7 +8,12 @@ import time
 import logging
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi_cache.decorator import cache
 # ── Logging setup ──────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +37,17 @@ origins = [
     "https://spoznienia.me",
 ]
 
+def custom_key_func(request: Request) -> str:
+    ip = get_remote_address(request)
+    # Rozdzielamy buckety na podstawie nagłówka by skrypty nie blokowały przeglądarki na tym samym IP
+    if request.headers.get("x-custom-client") == "spoznienia-frontend":
+        return f"front:{ip}"
+    return f"pub:{ip}"
+
+limiter = Limiter(key_func=custom_key_func)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -45,6 +61,7 @@ app.add_middleware(
 async def on_startup():
     global _startup_time
     _startup_time = time.time()
+    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     logger.info("=== API SERVER STARTED (cold start) at %s ===", datetime.utcnow().isoformat())
 
 
@@ -132,7 +149,9 @@ class TrainDetail(TrainSummary):
 # --- Endpoints ---
 
 @app.get("/stations", response_model=List[str])
-def list_stations(db: Client = Depends(get_db)):
+@limiter.limit("60/minute")
+@cache(expire=3600)  # Czas trzymania: 1 godzina
+def list_stations(request: Request, db: Client = Depends(get_db)):
     """
     Returns a list of domestic station names ranked by passenger volume (cacheable on frontend).
     """
@@ -148,7 +167,10 @@ def list_stations(db: Client = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/train-runs", response_model=List[TrainSummary])
+@limiter.limit("60/minute")
+@cache(expire=60)
 def list_trains(
+    request: Request,
     date: Optional[date] = None,
     number: Optional[str] = None,
     station: Optional[str] = None, # Simple/Global filter
@@ -176,7 +198,10 @@ def list_trains(
     return response.data
 
 @app.get("/stations/{name}/schedule", response_model=List[StationScheduleItem])
+@limiter.limit("60/minute")
+@cache(expire=30)
 def get_station_schedule(
+    request: Request,
     name: str,
     date: Optional[date] = None,
     db: Client = Depends(get_db)
@@ -202,7 +227,9 @@ def get_station_schedule(
 
 
 @app.get("/train-runs/{train_id}", response_model=TrainDetail)
-def get_train_detail(train_id: str, db: Client = Depends(get_db)):
+@limiter.limit("60/minute")
+@cache(expire=60)
+def get_train_detail(request: Request, train_id: str, db: Client = Depends(get_db)):
     # 1. Parse ID: YYYYMMDDnnnn -> Date, Number
     if len(train_id) < 9:
         raise HTTPException(status_code=400, detail="Invalid ID format. Expected YYYYMMDDnnnn")
