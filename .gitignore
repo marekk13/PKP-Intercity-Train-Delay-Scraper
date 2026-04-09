@@ -6,3 +6,5 @@ __pycache__/
 logs/
 old_versions/
 uwagi*
+data/
+tasks/

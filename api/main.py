@@ -190,7 +190,7 @@ def list_trains(
         query = query.ilike("number", f"%{number}%")
         
     if station:
-        query = query.or_(f"from_station.ilike.%{station}%,to_station.ilike.%{station}%")
+        query = query.or_(f"from_station.ilike.{station},to_station.ilike.{station}")
 
     query = query.range(offset, offset + limit - 1)
     response = query.execute()

@@ -70,7 +70,7 @@ BEGIN
     LEFT JOIN stations s_start ON ts.start_station_id = s_start.id
     LEFT JOIN stations s_end ON ts.end_station_id = s_end.id
     WHERE 
-        s_limit.name ILIKE ('%' || p_station_name || '%')
+        s_limit.name ILIKE p_station_name
         AND (p_date IS NULL OR tr.date = p_date)
     ORDER BY 
         COALESCE(rs.scheduled_arrival, rs.scheduled_departure) ASC;
