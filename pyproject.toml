@@ -1,0 +1,18 @@
+[project]
+name = "intercity-delays"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "python-dotenv>=1.0.1",
+    "fastapi>=0.115.0",
+    "fastapi-cache2>=0.2.2",
+    "playwright>=1.48.0",
+    "playwright-stealth>=1.0.6",
+    "pydantic>=2.0.0",
+    "slowapi>=0.1.9",
+    "supabase>=2.0.0",
+    "tzdata>=2025.3",
+    "uvicorn>=0.30.0",
+    "gunicorn>=22.0.0",
+]

@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This project is a robust, automated data engineering pipeline designed to scrape, process, and store real-time train delay and occupancy data from Polish national rail carrier PKP Intercity. The collected data is normalized and persisted in a PostgreSQL database, creating a historical dataset suitable for analysis, reporting, and further applications.
+This project is a comprehensive data engineering pipeline and web application designed to scrape, process, and serve real-time train delay and occupancy data from the Polish national rail carrier, PKP Intercity. The pipeline normalizes the collected data into a PostgreSQL database, exposing it through a public REST API and a user-friendly frontend interface ([spoznienia.me](https://spoznienia.me)), making it easily accessible for passengers and researchers alike.
 
 ## The Problem
 
@@ -12,13 +12,12 @@ This project bridges that gap by implementing a reliable, server-side pipeline t
 
 ## Key Features
 
--   **Fully Automated Execution**: Runs on a daily schedule using GitHub Actions, requiring no manual intervention.
--   **Robust Two-Stage Scraping**: Utilizes the modern **Playwright** framework to handle dynamic, JavaScript-heavy websites, ensuring reliability.
--   **Structured Data Persistence**: Archives data in a normalized PostgreSQL database, enabling complex queries and historical analysis, not just storing raw files.
--   **Data Normalization**: Implements a relational database schema to avoid data redundancy and ensure consistency (e.g., separate tables for stations, train categories, and disruptions).
--   **Comprehensive Logging**: Features a dedicated logging module that outputs to both the console and versioned log files for easy debugging and monitoring.
--   **Scalable and Maintainable**: The codebase is modular, with clear separation of concerns for data fetching, scraping, and database operations.
--   **Backup and Archiving**: In addition to the database, each run generates a timestamped JSON file as a raw data backup.
+- **Public API**: Features a fast, rate-limited REST API built with FastAPI, providing programmatic access to historical and real-time schedules, delays, and station boards.
+- **Web Interface**: Powering the [spoznienia.me](https://spoznienia.me) frontend, allowing users to easily check train delays and station schedules in a modern, mobile-friendly UI.
+- **Fully Automated Execution**: Scraper runs on a daily schedule using GitHub Actions, requiring no manual intervention.
+- **Robust Data Scraping**: Utilizes **Playwright** to handle dynamic, JavaScript-heavy websites, ensuring reliable data extraction.
+- **Structured Data Persistence**: Archives data in a normalized PostgreSQL database (Supabase), enabling complex queries and historical analysis.
+- **Data Normalization**: Implements an relational schema (e.g., separate tables for services, runs, stations, categories, and disruptions) to avoid redundancy and maintain data integrity.
 
 ## System Architecture & Data Flow
 
@@ -27,89 +26,94 @@ The entire process is orchestrated by the main script and executed automatically
 1.  **Scheduled Trigger**: The `scraper.yml` workflow is triggered daily at a scheduled time.
 2.  **Fetch Initial Train List (`get_train_data.py`)**: The pipeline begins by scraping `intercity.pl` to get a complete list of all trains running on the target day. This initial data includes train number, name, category, and route.
 3.  **Scrape Detailed Delay Information (`get_delays.py`)**: For each train identified, a Playwright-controlled headless browser navigates to the `portalpasazera.pl` portal. It automates searching for the train by its number and meticulously parses its entire timeline to extract:
-    *   Scheduled and delayed arrival/departure times for every station.
-    *   Distance markers and travel time between stations.
-    *   Information about any disruptions or difficulties on the route.
+    - Scheduled and delayed arrival/departure times for every station.
+    - Distance markers and travel time between stations.
+    - Information about any disruptions or difficulties on the route.
 4.  **Persist Data to PostgreSQL (`save_to_postgres.py`)**: The processed data is then sent to a PostgreSQL database (via Supabase). This script handles:
-    *   Connecting to the database using secure environment variables.
-    *   Caching dictionary data (stations, categories) to minimize DB queries.
-    *   Normalizing the data by inserting or updating records across multiple tables (`train_runs`, `run_stops`, `stations`, `difficulties`, etc.).
+    - Connecting to the database using secure environment variables.
+    - Caching dictionary data (stations, categories) to minimize DB queries.
+    - Normalizing the data by inserting or updating records across multiple tables (`train_runs`, `run_stops`, `stations`, `difficulties`, etc.).
 5.  **Generate JSON Backup**: A complete JSON dump of the session's scraped data is saved to the `data/` directory with a unique timestamp, serving as a persistent backup.
-6.  **Logging**: Throughout the process, events, warnings, and errors are logged to a timestamped file in the `logs/` directory.
+6.  **REST API**: A FastAPI backend (hosted on Render) connects to the database and serves the scraped data to the public and the frontend application, using aggressive caching and rate limiting for performance.
+7.  **Frontend**: A web UI hosted at [spoznienia.me](https://spoznienia.me) consumes the API to display data to users.
 
 ## Tech Stack
 
--   **Language**: Python 3.x
--   **Browser Automation**: **Playwright** for robustly handling modern, dynamic websites.
--   **Database**: PostgreSQL.
--   **Database Client**: **supabase-py** for interacting with the Supabase PostgreSQL backend.
--   **Automation/CI/CD**: **GitHub Actions** for scheduled execution.
--   **Infrastructure**: Deployed on a **self-hosted runner** (e.g., a cloud VM).
+- **Backend/API**: Python 3.x, **FastAPI**, Uvicorn, SlowAPI (rate limiting), FastAPI-Cache. Hosted on **Render**.
+- **Browser Automation**: **Playwright** for robustly handling modern, dynamic websites.
+- **Database**: PostgreSQL hosted on **Supabase** (interacted with via `supabase-py`).
+- **Automation/CI/CD**: **GitHub Actions** for scheduled execution.
+- **Frontend**: Consumed by a modern UI hosted on GitHub Pages / [spoznienia.me](https://spoznienia.me).
 
 ## Database Schema
 
-The data is stored in a relational schema to ensure integrity and facilitate efficient querying. Below is a simplified overview of the main tables:
+The data is stored in a normalized relational schema to ensure integrity and facilitate efficient querying. Below is a simplified overview of the main tables:
 
--   `train_runs`: The central table, holding one record for each unique train journey on a specific date.
-    -   `id`, `number`, `name`, `date`, `category_id`, `start_station_id`, `end_station_id`, `occupancy_id`.
--   `run_stops`: Links a train run to all the stations on its route.
-    -   `id`, `run_id`, `station_id`, `stop_order`, `scheduled_arrival`, `delay_arrival_min`, `distance_from_start_km`.
--   `stations`: A dictionary table for all unique station names.
-    -   `id`, `name`.
--   `train_categories`: A dictionary table for train types (e.g., IC, EIP, TLK).
-    -   `id`, `category_code`.
--   `difficulties`: A dictionary table for unique disruption reasons.
-    -   `id`, `description`.
--   `run_stop_difficulties`: A link table connecting a specific stop on a run with a reported difficulty.
-    -   `id`, `stop_id`, `difficulty_id`, `location`.
+- `train_services`: Defines a specific train route and its static properties.
+  - `id`, `number`, `name`, `category_id`, `is_domestic`, `start_station_id`, `end_station_id`.
+- `train_runs`: Holds one record for a specific instance of a train service on a given date.
+  - `id`, `service_id`, `date`, `occupancy_id`.
+- `run_stops`: Links a train run to all the stations on its route, storing schedule and delay info.
+  - `id`, `run_id`, `station_id`, `stop_order`, `scheduled_arrival`, `scheduled_departure`, `delay_arrival_min`, `delay_departure_min`, `distance_from_start_km`.
+- `stations`: Dictionary table for all unique station names.
+  - `id`, `name`, `is_domestic`, `passenger_volume_rank`.
+- `occupancies`, `train_categories`, `difficulties`: Dictionary tables for occupancy levels, train types (e.g., IC, EIP), and disruption descriptions.
+- `run_stop_difficulties`: A link table connecting a specific stop on a run with a reported difficulty.
+  - `id`, `stop_id`, `difficulty_id`, `location`.
 
-## Setup and Usage
+## Public API Usage
 
-### Prerequisites
+The project exposes a RESTful API hosted on Render, offering endpoints to query the collected data. The API is rate-limited and heavily cached.
 
--   Python 3.8+
--   A running PostgreSQL database.
--   Environment variables configured for database connection (see below).
+### Endpoints
 
-### Installation
+- `GET /stations`: Returns a list of all supported domestic station names ranked by passenger volume.
+- `GET /train-runs`: Returns a list of train summaries (filtered by date, train number, or specific station).
+- `GET /stations/{name}/schedule`: Get the departures/arrivals board for a specific station on a specific date.
+- `GET /train-runs/{train_id}`: Get the full detail of a specific train run, including timeline, delays at each stop, and reported difficulties.
 
-1.  **Clone the repository:**
+## Local Development (Optional)
+
+If you wish to run the scraper or the API locally:
+
+1.  **Clone the repository and prepare the environment:**
+
+It is recommended to use [uv](https://github.com/astral-sh/uv) for fast and reliable dependency management.
+
 ```bash
-git clone <your-repository-url>
-cd <repository-directory>
+git clone https://github.com/marekk13/PKP-Intercity-Train-Delay-Scraper.git
+cd PKP-Intercity-Train-Delay-Scraper
+
+# Create virtual environment and install dependencies
+uv sync
+
+# Install Playwright browser
+uv run playwright install chromium
 ```
 
-2.  **Create and activate a virtual environment:**
-```bash
-# For macOS/Linux
-python3 -m venv .venv
-source .venv/bin/activate
+2.  **Configuration:** Create a `.env` file with `SUPABASE_URL` and `SUPABASE_SERVICE_KEY`.
 
-# For Windows
+3.  **Run the API:**
+
+```bash
+uv run uvicorn api.main:app --reload
+```
+
+4.  **Run the Scraper manually:**
+
+```bash
+uv run python get_train_data.py
+```
+
+## Legacy Installation (pip)
+
+If you don't have `uv` installed, you can still use standard `pip`:
+
+```bash
 python -m venv .venv
-.venv\Scripts\activate
-```
-
-3.  **Install the required dependencies:**
-```bash
+source .venv/bin/activate # (.venv\Scripts\activate on Windows)
 pip install -r requirements.txt
-```
-
-4.  **Install Playwright browser dependencies:**
-```bash
 playwright install chromium
-```
-
-### Configuration
-
-The script requires environment variables to connect to the Supabase/PostgreSQL database. Create a `.env` file or set them in your environment.
-
-### Running the Scraper Manually
-
-To execute the entire pipeline manually, run the main script:
-
-```bash
-python get_train_data.py
 ```
 
 ## Automation with GitHub Actions
@@ -123,7 +127,7 @@ name: Scrape Train Delays
 
 on:
   schedule:
-    - cron: '00 22 * * *'
+    - cron: "00 22 * * *"
   workflow_dispatch:
 
 jobs:
@@ -155,6 +159,7 @@ The most valuable output is the structured data populated in the PostgreSQL data
 For each run, a backup file is generated in the `data/` directory with a unique name like `train_data_YYYY-MM-DD-HHMM.json`.
 
 **Example `train_data.json` entry:**
+
 ```json
 [
   {
