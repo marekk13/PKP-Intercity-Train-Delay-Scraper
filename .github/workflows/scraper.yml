@@ -19,17 +19,17 @@ jobs:
         with:
           clean: false
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        
       - name: Install dependencies
         run: |
-          python3 -m venv .venv
-          source .venv/bin/activate         
-          pip install -r requirements.txt        
-          playwright install chromium
+          uv sync
+          uv run playwright install chromium
 
       - name: Run scraper
         run: |
-          source .venv/bin/activate
-          python3 get_train_data.py
+          uv run python get_train_data.py
 
       - name: Commit new stations if discovered
         run: |
