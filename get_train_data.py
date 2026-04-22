@@ -20,6 +20,78 @@ from get_delays import get_delays
 from logger_config import setup_logging
 from save_to_postgres import save_data
 
+import urllib.request
+import urllib.error
+
+def create_github_issue(title: str, body: str, logger: logging.Logger):
+    """Tworzy issue na GitHubie, używając GITHUB_TOKEN z environment variables."""
+    token = os.environ.get("GITHUB_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY")  # np. marekk13/PKP-Intercity-Train-Delay-Scraper
+    
+    if not token or not repo:
+        logger.warning("Brak GITHUB_TOKEN lub GITHUB_REPOSITORY. Pominięto tworzenie Issue na GitHubie.")
+        return
+        
+    url = f"https://api.github.com/repos/{repo}/issues"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Python-urllib"
+    }
+    data = json.dumps({
+        "title": title,
+        "body": body,
+        "labels": ["bug", "scraper-error"]
+    }).encode("utf-8")
+    
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req) as response:
+            if response.status == 201:
+                res_body = json.loads(response.read().decode("utf-8"))
+                logger.info(f"Pomyślnie utworzono Issue na GitHubie: {res_body.get('html_url')}")
+    except urllib.error.URLError as e:
+        logger.error(f"Nie udało się utworzyć Issue na GitHubie: {e}")
+
+def fetch_page_data(page, url, page_num, logger, max_retries=3):
+    """Pobiera dane z pojedynczej strony z mechanizmem retry."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"Pobieranie danych ze strony {page_num} (próba {attempt}/{max_retries}): {url}")
+            page.goto(url, timeout=30000)
+
+            table_selector = "table.table"
+            logger.debug(f"Oczekiwanie na selektor: '{table_selector}'")
+            table = page.wait_for_selector(table_selector, timeout=1500)
+
+            rows = table.query_selector_all("tr")[1:]  # Pomijamy nagłówek
+
+            if not rows:
+                logger.info(f"Tabela na stronie {page_num} jest pusta. Zakończono pobieranie.")
+                return []
+
+            page_data = []
+            for row in rows:
+                cells = row.query_selector_all("td")
+                if not cells:
+                    continue
+                left = [" ".join(c.text_content().split()) for c in cells[:5]]
+                right = [" ".join(c.text_content().split()) for c in cells[6:]] if len(cells) > 6 else []
+                page_data.append(left + right)
+
+            return page_data
+
+        except TimeoutError:
+            logger.error(f"TimeoutError na stronie {page_num} podczas próby {attempt}/{max_retries}.")
+            if attempt == max_retries:
+                logger.error(f"Nie udało się pobrać strony {page_num} po {max_retries} próbach.")
+                raise
+        except Exception as e:
+            logger.error(f"Inny błąd na stronie {page_num} (próba {attempt}): {e}")
+            if attempt == max_retries:
+                raise
+
+
 def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
     """
     Pobiera dane o frekwencji pociągów ze strony intercity.pl.
@@ -45,33 +117,24 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
                 f"location=&date={target_date}&category%5Beic_premium%5D=eip"
                 f"&category%5Beic%5D=eic&category%5Bic%5D=ic&category%5Btlk%5D=tlk&page={page_num}"
             )
-            logger.info(f"Pobieranie danych ze strony {page_num}: {url}")
-
+            
             try:
-                page.goto(url, timeout=30000)
-
-                table_selector = "table.table"
-                logger.debug(f"Oczekiwanie na selektor: '{table_selector}'")
-                table = page.wait_for_selector(table_selector, timeout=1500)
-
+                page_data = fetch_page_data(page, url, page_num, logger, max_retries=3)
             except TimeoutError:
-                logger.error(f"Na stronie {page_num} nie znaleziono tabeli. Uruchamiam diagnostykę.")
+                logger.critical(f"Krytyczny błąd pobierania danych na stronie {page_num} po 3 próbach.")
+                create_github_issue(
+                    title=f"Błąd pobierania danych intercity - strona {page_num}",
+                    body=f"Wystąpił TimeoutError podczas pobierania strony {page_num} dla daty {target_date} mimo 3 prób re-try.",
+                    logger=logger
+                )
+                break
+            except Exception as e:
+                logger.critical(f"Nieoczekiwany błąd na stronie {page_num}: {e}")
                 break
 
-            rows = table.query_selector_all("tr")[1:]  # Pomijamy nagłówek
-
-            if not rows:
-                logger.info(f"Tabela na stronie {page_num} jest pusta. Zakończono pobieranie.")
+            if not page_data:
+                # Pusta lista oznacza, że tabela była pusta (koniec stron)
                 break
-
-            page_data = []
-            for row in rows:
-                cells = row.query_selector_all("td")
-                if not cells:
-                    continue
-                left = [" ".join(c.text_content().split()) for c in cells[:5]]
-                right = [" ".join(c.text_content().split()) for c in cells[6:]] if len(cells) > 6 else []
-                page_data.append(left + right)
 
             all_trains_data.extend(page_data)
             logger.info(f"Pobrano {len(page_data)} pociągów ze strony {page_num}. Łącznie: {len(all_trains_data)}")
