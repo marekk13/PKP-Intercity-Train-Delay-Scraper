@@ -5,72 +5,17 @@ import urllib.request
 from supabase import create_client, Client
 from typing import Dict, List, Any, Tuple, Set
 
-STATION_NAME_OVERRIDES = {
-    "Kraków Główny Osobowy": "Kraków Główny",
-    "Gdynia Główna Osobowa": "Gdynia Główna",
-    "Lublin": "Lublin Główny",
-    "Rzeszów": "Rzeszów Główny",
-    "Zielona Góra": "Zielona Góra Główna",
-    "Radom": "Radom Główny",
-    "Kielce": "Kielce Główne",
-    "Krynica": "Krynica-Zdrój",
-    "Bielsko Biała Główna": "Bielsko-Biała Główna",
-    "Kudowa Zdrój": "Kudowa-Zdrój",
-    "Polanica Zdrój": "Polanica-Zdrój",
-    "Olsztyn Główny/Szczecin Główny": "Olsztyn Główny",
-    "Szczecin Główny/Świnoujście": "Szczecin Główny",
+def load_station_aliases() -> Dict[str, str]:
+    aliases_path = os.path.join(os.path.dirname(__file__), 'docs', 'misc', 'station_aliases.json')
+    if os.path.exists(aliases_path):
+        try:
+            with open(aliases_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Błąd ładowania pliku z aliasami stacji: {e}")
+    return {}
 
-    "Berlin Hauptbahn": "Berlin Hauptbahnhof",
-    "Berlin-Charlotte": "Berlin-Charlottenburg",
-    "Berlin Zoolog Garten": "Berlin Zoologischer Garten",
-    "Leipzig Hbf": "Leipzig Hauptbahnhof",
-    "Muenchen Hbf": "München Hauptbahnhof",
-    "Muenchen Ost": "München Ost",
-    "Graz Hbf": "Graz Hauptbahnhof",
-    "Muerzzuschlag": "Mürzzuschlag",
-    "Salzburg Hbf.": "Salzburg Hauptbahnhof",
-    "St.Poelten Hbf": "St. Pölten Hauptbahnhof",
-    "Wien Hbf": "Wien Hauptbahnhof",
-    "Wien Westbf": "Wien Westbahnhof",
-
-    "Dnipro": "Dnipro-Holovnyi",
-    "Dnipro Hl.": "Dnipro-Holovnyi",
-    "Harkov-Passajirs": "Kharkiv-Pasazhyrskyi",
-    "Charków": "Kharkiv-Pasazhyrskyi",
-    "Kiev-Passajirski": "Kyiv-Pasazhyrskyi",
-    "Kyiv-Pas.": "Kyiv-Pasazhyrskyi",
-    "Kijów": "Kyiv-Pasazhyrskyi",
-    "Odessa-Glavnaia": "Odesa-Holovna",
-    "Zaporoze": "Zaporizhzhia-1",
-    "Zaporoże": "Zaporizhzhia-1",
-    "Krzywy Róg": "Kryvyi Rih",
-    
-    "Bratislava Hlavna Stanica": "Bratislava hlavná stanica",
-    "Bohumin": "Bohumín",
-    "Breclav": "Břeclav",
-    "Ceska Trebova": "Česká Třebová",
-    "Hodonin": "Hodonín",
-    "Hranice na Morave": "Hranice na Moravě",
-    "Jablonne nad Orlici": "Jablonné nad Orlicí",
-    "Nove Zamky": "Nové Zámky",
-    "Olomouc Hlavni Nadrazi": "Olomouc hlavní nádraží",
-    "Ostrava Hlavni Nadrazi": "Ostrava hlavní nádraží",
-    "Pardubice Hlavni Nadrazi": "Pardubice hlavní nádraží",
-    "Praha Hlavni Nadrazi": "Praha hlavní nádraží",
-    "Praha": "Praha hlavní nádraží",
-    "Praha hl.n.": "Praha hlavní nádraží",
-    "Praha-Liben": "Praha-Libeň",
-    "Praha-Vrsovice": "Praha-Vršovice",
-    "Prerov": "Přerov",
-    "Stare Mesto u Uher. Hradiste": "Staré Město u Uherského Hradiště",
-    "Zabreh na Morave": "Zábřeh na Moravě",
-    "Usti nad Orlici": "Ústí nad Orlicí",
-    "Usti nad Orlici Mesto": "Ústí nad Orlicí město",
-    "Sturovo": "Štúrovo",
-
-    # Litwa
-    "Wilnus": "Vilnius"
-}
+STATION_NAME_OVERRIDES = load_station_aliases()
 
 TRAIN_NAME_OVERRIDES = {
     "BACZYNSKI": "Baczyński",
