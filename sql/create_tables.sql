@@ -9,7 +9,9 @@ COMMENT ON TABLE train_categories IS 'Słownik kategorii pociągów (IC, TLK, EI
 -- stacje kolejowe
 CREATE TABLE IF NOT EXISTS stations (
     id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL
+    name TEXT UNIQUE NOT NULL,
+    latitude NUMERIC,
+    longitude NUMERIC
 );
 COMMENT ON TABLE stations IS 'Unikalna lista wszystkich stacji kolejowych.';
 
