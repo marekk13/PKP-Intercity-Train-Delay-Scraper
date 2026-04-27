@@ -178,7 +178,13 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
                 if len(parts) > 0:
                     first_part_elements = parts[0].split('###')
                     if len(first_part_elements) > 1: station_diff = first_part_elements[1]
-                if len(parts) > 2: difficulties_reason = parts[2]
+                if len(parts) > 2:
+                    difficulties_reason = parts[2]
+                    if '#' in difficulties_reason:
+                        reason_parts = difficulties_reason.split('#', 1)
+                        difficulties_reason = reason_parts[0].strip()
+                        if len(reason_parts) > 1 and reason_parts[1].strip():
+                            station_diff = reason_parts[1].strip()
 
         route_details.append({
             "station_name": station_name, "arrival_time": arrival_time, "departure_time": departure_time,
