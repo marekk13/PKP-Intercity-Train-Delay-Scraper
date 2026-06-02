@@ -122,11 +122,14 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
                 page_data = fetch_page_data(page, url, page_num, logger, max_retries=3)
             except TimeoutError:
                 logger.critical(f"Krytyczny błąd pobierania danych na stronie {page_num} po 3 próbach.")
-                create_github_issue(
-                    title=f"Błąd pobierania danych intercity - strona {page_num}",
-                    body=f"Wystąpił TimeoutError podczas pobierania strony {page_num} dla daty {target_date} mimo 3 prób re-try.",
-                    logger=logger
-                )
+                if page_num not in (13, 14, 15):
+                    create_github_issue(
+                        title=f"Błąd pobierania danych intercity - strona {page_num}",
+                        body=f"Wystąpił TimeoutError podczas pobierania strony {page_num} dla daty {target_date} mimo 3 prób re-try.",
+                        logger=logger
+                    )
+                else:
+                    logger.info(f"Pominięto tworzenie Issue na GitHubie dla strony {page_num}.")
                 break
             except Exception as e:
                 logger.critical(f"Nieoczekiwany błąd na stronie {page_num}: {e}")
