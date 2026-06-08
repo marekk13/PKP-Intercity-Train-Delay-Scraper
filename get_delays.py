@@ -56,7 +56,11 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     """Pobiera szczegółowe dane o trasie pociągu."""
     logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
-    page.locator("#ftnu-number").fill(train_number)
+    input_field = page.locator("#ftnu-number")
+    input_field.click()
+    input_field.clear()
+    input_field.press_sequentially(train_number, delay=100)
+    time.sleep(0.5)
 
     try:
         page.wait_for_load_state('networkidle', timeout=5000)
@@ -219,7 +223,9 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger):
 
         # Wybór wyszukiwania po numerze
         page.locator("span.find-train-selector").click()
+        time.sleep(0.3)
         page.locator("li:has-text('po numerze')").click()
+        time.sleep(0.3)
 
         details = get_train_details(page, train_number, logger)
         train["delay_info"] = details
@@ -239,11 +245,17 @@ def get_delays(trains_data: list = None, logger=None) -> list:
 
     with sync_playwright() as p:
         try:
+            try:
+                from playwright_stealth import Stealth
+                Stealth().hook_playwright_context(p)
+            except ImportError:
+                pass
+
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 locale='pl-PL',
                 timezone_id='Europe/Warsaw',
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                ignore_https_errors=True
             )
             page = context.new_page()
             apply_stealth(page)

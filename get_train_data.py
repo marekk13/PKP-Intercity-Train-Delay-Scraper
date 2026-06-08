@@ -102,9 +102,18 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
 
     with sync_playwright() as p:
         try:
+            try:
+                from playwright_stealth import Stealth
+                Stealth().hook_playwright_context(p)
+            except ImportError:
+                pass
+
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                locale='pl-PL',
+                timezone_id='Europe/Warsaw',
+                ignore_https_errors=True
+            )
             page = context.new_page()
             apply_stealth(page)
         except Exception as e:
