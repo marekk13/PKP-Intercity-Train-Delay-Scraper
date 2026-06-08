@@ -20,6 +20,10 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPO: ${{ github.repository }}
       DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+      PROXY_HOST: ${{ secrets.PROXY_HOST }}
+      PROXY_PORT: ${{ secrets.PROXY_PORT }}
+      PROXY_USER: ${{ secrets.PROXY_USER }}
+      PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
