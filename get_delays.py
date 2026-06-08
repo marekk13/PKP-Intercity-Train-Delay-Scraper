@@ -257,7 +257,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
             proxy_user = os.environ.get("PROXY_USER")
             proxy_pass = os.environ.get("PROXY_PASSWORD")
 
-            launch_args = {"headless": False}
+            launch_args = {"headless": True}
             if proxy_host and proxy_port:
                 launch_args["proxy"] = {
                     "server": f"http://{proxy_host}:{proxy_port}",
