@@ -2,6 +2,14 @@ import re
 import time
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError, Page
+try:
+    from playwright_stealth import stealth_sync
+    def apply_stealth(page):
+        stealth_sync(page)
+except ImportError:
+    from playwright_stealth import Stealth
+    def apply_stealth(page):
+        Stealth().apply_stealth_sync(page)
 
 URL = "https://portalpasazera.pl/Wyszukiwarka/Index"
 
@@ -177,7 +185,8 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
                 parts = data_obj_1_value.split('$')
                 if len(parts) > 0:
                     first_part_elements = parts[0].split('###')
-                    if len(first_part_elements) > 1: station_diff = first_part_elements[1]
+                    if len(first_part_elements) > 1:
+                        station_diff = first_part_elements[1].lstrip('#').strip()
                 if len(parts) > 2:
                     difficulties_reason = parts[2]
                     if '#' in difficulties_reason:
@@ -237,6 +246,7 @@ def get_delays(trains_data: list = None, logger=None) -> list:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             )
             page = context.new_page()
+            apply_stealth(page)
             logger.info("Pomyślnie uruchomiono przeglądarkę Playwright.")
         except Exception as e:
             logger.critical(f"Nie udało się uruchomić przeglądarki Playwright. Błąd: {e}")

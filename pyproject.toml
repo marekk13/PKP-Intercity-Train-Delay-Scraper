@@ -15,4 +15,12 @@ dependencies = [
     "tzdata>=2025.3",
     "uvicorn>=0.30.0",
     "gunicorn>=22.0.0",
+    "folium>=0.20.0",
+    "pandas>=3.0.3",
+    "matplotlib>=3.10.9",
+    "seaborn>=0.13.2",
+    "plotly>=6.7.0",
+    "numpy>=2.4.4",
+    "pyarrow>=24.0.0",
+    "scikit-learn>=1.9.0",
 ]

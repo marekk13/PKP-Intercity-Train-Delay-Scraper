@@ -334,6 +334,11 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
     if len(info_array) > 1 and info_array[1] and info_array[1].strip():
         location = info_array[1].strip()
 
+    if location:
+        location = location.lstrip('#').strip()
+        if not location:
+            location = None
+
     # Zastosowanie algorytmu czyszczenia i ekstrakcji lokalizacji
     if description:
         extracted_loc, cleaned_desc = _clean_difficulty_text(description)
