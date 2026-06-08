@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "45 20 * * *"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Uruchomienie testowe (dry run) - bez zapisu do bazy"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   scrape:
@@ -13,6 +19,7 @@ jobs:
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

@@ -196,8 +196,11 @@ if __name__ == "__main__":
     except IOError as e:
         logger.critical(f"Nie udało się zapisać pliku JSON: {e}")
 
-    logger.info("Rozpoczęto proces wysyłania danych do Supabase...")
-    save_data(data_with_delays, logger)
+    if os.environ.get("DRY_RUN") == "1":
+        logger.info("Uruchomiono w trybie dry_run. Pomijanie wysyłania danych do Supabase.")
+    else:
+        logger.info("Rozpoczęto proces wysyłania danych do Supabase...")
+        save_data(data_with_delays, logger)
 
     logger.info("=" * 50)
     logger.info("PROCES SCRAPOWANIA ZAKOŃCZONY")
