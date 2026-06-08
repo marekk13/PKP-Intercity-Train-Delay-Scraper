@@ -183,6 +183,130 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
         return None
 
 
+import re
+
+def _clean_difficulty_text(desc: str) -> Tuple[str, str]:
+    """
+    Czyści opis utrudnienia i wyodrębnia lokalizację (stację lub odcinek).
+    Zwraca krotkę: (wyodrębniona_lokalizacja, oczyszczony_opis).
+    """
+    desc_clean = desc
+    desc_clean = re.sub(r'\s*\(dot\..*?\)', '', desc_clean)
+    desc_clean = re.sub(r'\s*/układ.*?/', '', desc_clean)
+    
+    # Warunki pogodowe IMiGW
+    if "IMiGW" in desc_clean:
+        return None, "Trudne warunki atmosferyczne"
+        
+    # Honorowanie biletów
+    if "Wprowadzono wzajemne honorowanie" in desc_clean or "Wprowadzono honorowanie" in desc_clean:
+        return None, "Wzajemne honorowanie biletów"
+        
+    # Podział na zdania
+    text_normalized = re.sub(r'\s+', ' ', desc_clean).strip()
+    parts = re.split(r'\.\s+', text_normalized)
+    sentences = [p.strip() for p in parts if p.strip()]
+    
+    if len(sentences) >= 2:
+        first = sentences[0]
+        second = sentences[1]
+        
+        is_location = len(first) < 60 or " - " in first
+        is_not_difficulty = not any(kw in first.lower() for kw in ["awaria", "usterka", "wypadek", "opóźnienia", "trudne", "złe", "pociąg", "kradzież"])
+        
+        if is_location and is_not_difficulty:
+            return first, _map_difficulty_category(second)
+        else:
+            return None, _map_difficulty_category(first)
+    else:
+        return None, _map_difficulty_category(desc_clean)
+
+def _map_difficulty_category(text: str) -> str:
+    """
+    Mapuje opis utrudnienia na znormalizowaną kategorię.
+    """
+    text_clean = re.sub(r'\s+', ' ', text).strip()
+    text_lower = text_clean.lower()
+    
+    # 1. Warunki atmosferyczne
+    if "warunki atmosferyczne" in text_lower or "ostrzeżeniami pogodowymi" in text_lower or "złe warunki" in text_lower or "trudne warunki" in text_lower:
+        return "Trudne warunki atmosferyczne"
+    if "drzewo na sieć" in text_lower or "drzewo na siec" in text_lower or "przewróconym drzewem" in text_lower:
+        return "Przewrócone drzewo na sieć trakcyjną"
+        
+    # 2. Sterowanie ruchem i łączność
+    if "sterowania ruchem" in text_lower or "urządzeń sterowania" in text_lower or "usterka urządzeń sterowania" in text_lower:
+        return "Awaria urządzeń sterowania ruchem kolejowym"
+    if "usterka systemu łączności" in text_lower:
+        return "Usterka systemu łączności"
+    if "awaria systemu informatycznego" in text_lower:
+        return "Awaria systemu informatycznego"
+        
+    # 3. Trakcja i zasilanie
+    if "awaria sieci trakcyjnej" in text_lower or "uszkodzona sieć trakcyjna" in text_lower or "usterka sieci trakcyjnej" in text_lower or "uszkodzona sieć" in text_lower or "oblodzona sieć" in text_lower:
+        return "Awaria sieci trakcyjnej"
+    if "brak zasilania" in text_lower:
+        return "Brak zasilania sieci trakcyjnej"
+    if "awaria elementów infrastruktury" in text_lower or "inne przyczyny związane z infrastrukturą" in text_lower or "awaria infrastruktury" in text_lower or "przyczyny związane z infrastrukturą" in text_lower:
+        return "Awaria elementów infrastruktury kolejowej"
+    if "kradzież elementów" in text_lower or "kradzieże i dewastacje" in text_lower or "kradzież element" in text_lower:
+        return "Kradzież elementów infrastruktury kolejowej"
+    if "awaria urządzeń energetycznych" in text_lower:
+        return "Awaria urządzeń energetycznych"
+        
+    # 4. Tabor i pociągi
+    if "awaria taboru" in text_lower or "defekt taboru" in text_lower or "awaria/uszkodzenie taboru" in text_lower or "naprawa pociągu" in text_lower or "uszkodzony pantograf" in text_lower or "defekt pociągu" in text_lower or "awaria pociągu" in text_lower or "uszkodzenie taboru" in text_lower or ("awaria" in text_lower and "pociąg" in text_lower):
+        return "Awaria taboru"
+    if "sprawdzenie stanu technicznego taboru" in text_lower:
+        return "Sprawdzenie stanu technicznego taboru"
+    if "włączanie/wyłączanie wagonów" in text_lower:
+        return "Włączanie/wyłączanie wagonów"
+        
+    # 5. Wypadki i zdarzenia
+    if "wypadek z udziałem człowieka" in text_lower or "wypadek z człowiekiem" in text_lower or "wydarzenie z udziałem człowieka" in text_lower:
+        return "Wypadek z udziałem człowieka"
+    if "wypadek z udziałem pojazdów" in text_lower or "wypadek z udziałem pojazdu" in text_lower or "udziałem samochodu" in text_lower:
+        return "Wypadek z udziałem pojazdów drogowych"
+    if "wypadek z udziałem zwierząt" in text_lower or "wypadek z udziałem zwierzyny" in text_lower or "kolizja ze zwierzętami" in text_lower or "wypadek z udziałem zwierzęcia" in text_lower or "wypadek ze zwierzętami" in text_lower or "kolizja ze zwierzęciem" in text_lower or "zderzenie ze zwierzęciem" in text_lower or "zderzenie ze zwierzętami" in text_lower:
+        return "Kolizja ze zwierzętami"
+    if "wypadek powodujący przerwę" in text_lower:
+        return "Wypadek powodujący przerwę w ruchu pociągów"
+        
+    # 6. Przyczyny operacyjne, inwestycje i inne
+    if "realizacją inwestycji" in text_lower or "prac modernizacyjnych" in text_lower:
+        return "Przyczyny związane z realizacją inwestycji"
+    if "nieprzewidziane wydarzenia" in text_lower or "nieprzewidziane zdarzenie" in text_lower or "nieprzewidziane wypadki" in text_lower or "nieprzewidziane wydarzenie" in text_lower:
+        return "Inne"
+    if "związane z utrzymaniem linii" in text_lower:
+        return "Inne przyczyny związane z utrzymaniem linii kolejowych"
+    if "opóźnienie z winy innego zarządcy" in text_lower or "utrudnienia w ruchu pociągów po stronie" in text_lower or "z winy innego zarządcy" in text_lower:
+        return "Opóźnienie z winy innego zarządcy infrastruktury"
+    if "interwencja służb porządkowych" in text_lower:
+        return "Interwencja służb porządkowych"
+    if "interwencja służb medycznych" in text_lower:
+        return "Interwencja służb medycznych"
+    if "interwencja służb ratowniczych" in text_lower:
+        return "Interwencja służb ratowniczych"
+    if "wydłużone przygotowanie wagonów" in text_lower:
+        return "Wydłużone przygotowanie wagonów do drogi"
+    if "wydłużone lokowanie" in text_lower:
+        return "Wydłużone lokowanie pasażerów"
+    if "wydłużone oczekiwanie" in text_lower:
+        return "Wydłużone oczekiwanie na obsługę"
+    if "wzajemne honorowanie biletów" in text_lower or "wzajemne honorowania biletów" in text_lower or "honorowanie biletów" in text_lower:
+        return "Wzajemne honorowanie biletów"
+    if "odwołany" in text_lower or "został odwołany" in text_lower:
+        return "Pociąg odwołany"
+    if "z przyczyn technicznych" in text_lower and "opóźnienia" in text_lower:
+        return "Inne"
+    if "zdarzenie z pociągiem" in text_lower or "zdarzenie związane z prowadzeniem ruchu" in text_lower:
+        return "Zdarzenie związane z prowadzeniem ruchu kolejowego"
+        
+    clean_text = text_clean
+    if clean_text.endswith("."):
+        clean_text = clean_text[:-1].strip()
+    return clean_text
+
 def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
     """
     Parsuje niespójne pole difficulties_info na opis i lokalizację.
@@ -209,6 +333,13 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
 
     if len(info_array) > 1 and info_array[1] and info_array[1].strip():
         location = info_array[1].strip()
+
+    # Zastosowanie algorytmu czyszczenia i ekstrakcji lokalizacji
+    if description:
+        extracted_loc, cleaned_desc = _clean_difficulty_text(description)
+        description = cleaned_desc
+        if extracted_loc and not location:
+            location = extracted_loc
 
     return description, location
 
