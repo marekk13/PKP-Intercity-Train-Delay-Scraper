@@ -1,6 +1,7 @@
 import re
 import time
 import logging
+import os
 from playwright.sync_api import sync_playwright, TimeoutError, Page
 try:
     from playwright_stealth import stealth_sync
@@ -60,7 +61,9 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     input_field.click()
     input_field.clear()
     input_field.press_sequentially(train_number, delay=100)
-    time.sleep(0.5)
+
+    # Usunięcie focusu z pola (blur), co zamyka listę podpowiedzi (autocomplete) bez zamykania modala
+    input_field.evaluate("el => el.blur()")
 
     try:
         page.wait_for_load_state('networkidle', timeout=5000)
@@ -223,9 +226,7 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger):
 
         # Wybór wyszukiwania po numerze
         page.locator("span.find-train-selector").click()
-        time.sleep(0.3)
         page.locator("li:has-text('po numerze')").click()
-        time.sleep(0.3)
 
         details = get_train_details(page, train_number, logger)
         train["delay_info"] = details
@@ -251,7 +252,22 @@ def get_delays(trains_data: list = None, logger=None) -> list:
             except ImportError:
                 pass
 
-            browser = p.chromium.launch(headless=True)
+            proxy_host = os.environ.get("PROXY_HOST")
+            proxy_port = os.environ.get("PROXY_PORT")
+            proxy_user = os.environ.get("PROXY_USER")
+            proxy_pass = os.environ.get("PROXY_PASSWORD")
+
+            launch_args = {"headless": False}
+            if proxy_host and proxy_port:
+                launch_args["proxy"] = {
+                    "server": f"http://{proxy_host}:{proxy_port}",
+                }
+                if proxy_user and proxy_pass:
+                    launch_args["proxy"]["username"] = proxy_user
+                    launch_args["proxy"]["password"] = proxy_pass
+                logger.info(f"Uruchamianie Playwright z proxy: {proxy_host}:{proxy_port}")
+
+            browser = p.chromium.launch(**launch_args)
             context = browser.new_context(
                 locale='pl-PL',
                 timezone_id='Europe/Warsaw',

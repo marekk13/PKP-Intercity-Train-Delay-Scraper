@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
 
 from playwright.sync_api import sync_playwright, TimeoutError
 
@@ -108,7 +109,23 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
             except ImportError:
                 pass
 
-            browser = p.chromium.launch(headless=True)
+            proxy_host = os.environ.get("PROXY_HOST")
+            proxy_port = os.environ.get("PROXY_PORT")
+            proxy_user = os.environ.get("PROXY_USER")
+            proxy_pass = os.environ.get("PROXY_PASSWORD")
+
+            launch_args = {"headless": True}
+            if proxy_host and proxy_port:
+                launch_args["proxy"] = {
+                    "server": f"http://{proxy_host}:{proxy_port}",
+                }
+                if proxy_user and proxy_pass:
+                    launch_args["proxy"]["username"] = proxy_user
+                    launch_args["proxy"]["password"] = proxy_pass
+                logger.info(f"Uruchamianie Playwright z proxy: {proxy_host}:{proxy_port}")
+
+            browser = p.chromium.launch(**launch_args)
+            # browser = p.chromium.launch(headless=False)
             context = browser.new_context(
                 locale='pl-PL',
                 timezone_id='Europe/Warsaw',
@@ -170,6 +187,8 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     # 1. Konfiguracja loggera
     logger = setup_logging()
 
