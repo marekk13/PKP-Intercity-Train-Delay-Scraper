@@ -410,12 +410,15 @@ def save_data(data_with_delays: list, logger: logging.Logger):
                                                  logger, new_stations)
             end_station_id = _get_or_create_id(supabase, 'stations', 'name', train_data.get("to"), stations_cache,
                                                logger, new_stations)
-            occupancy_id = _get_or_create_id(supabase, 'occupancies', 'status_description', train_data.get("occupancy"),
-                                             occupancies_cache, logger, None)
+            
+            occupancy_id = None
+            if train_data.get("occupancy"):
+                occupancy_id = _get_or_create_id(supabase, 'occupancies', 'status_description', train_data.get("occupancy"),
+                                                 occupancies_cache, logger, None)
 
-            if not all([category_id, start_station_id, end_station_id, occupancy_id]):
+            if not all([category_id, start_station_id, end_station_id]):
                 logger.error(
-                    f"Pociąg nr {train_number}: Nie udało się uzyskać ID dla jednej z kluczowych relacji (kategoria/stacje/frekwencja). Pomijanie.")
+                    f"Pociąg nr {train_number}: Nie udało się uzyskać ID dla jednej z kluczowych relacji (kategoria/stacje). Pomijanie.")
                 runs_with_errors += 1
                 continue
 
@@ -459,14 +462,30 @@ def save_data(data_with_delays: list, logger: logging.Logger):
                 ignore_duplicates=True
             ).execute()
 
-            if not response.data:
-                logger.info(
-                    f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje w bazie lub wystąpił błąd. Pomijanie.")
-                runs_skipped += 1
-                continue
-
-            inserted_run_id = response.data[0]['id']
-            runs_inserted += 1
+            if response.data:
+                inserted_run_id = response.data[0]['id']
+                runs_inserted += 1
+            else:
+                # Jeśli ignore_duplicates=True sprawiło, że nic nie wstawiono (bo wpis już istniał)
+                existing_run = supabase.table("train_runs").select("id").eq("service_id", service_id).eq("date", train_data.get("date")).execute()
+                if existing_run.data:
+                    inserted_run_id = existing_run.data[0]['id']
+                    # Sprawdzamy, czy ten przejazd ma już przypisane przystanki
+                    existing_stops = supabase.table("run_stops").select("id").eq("run_id", inserted_run_id).limit(1).execute()
+                    if existing_stops.data:
+                        logger.info(
+                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje i ma zapisane przystanki. Pomijanie.")
+                        runs_skipped += 1
+                        continue
+                    else:
+                        logger.info(
+                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} istnieje w bazie (bez przystanków). Uzupełnianie trasy.")
+                        runs_skipped += 1
+                else:
+                    logger.error(
+                        f"Pociąg nr {train_number} z dnia {train_data.get('date')}: Nie udało się uzyskać ani utworzyć przejazdu. Pomijanie.")
+                    runs_with_errors += 1
+                    continue
 
             delay_info = train_data.get("delay_info")
             if not isinstance(delay_info, list):

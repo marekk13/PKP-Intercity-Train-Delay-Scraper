@@ -114,24 +114,37 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
             proxy_user = os.environ.get("PROXY_USER")
             proxy_pass = os.environ.get("PROXY_PASSWORD")
 
-            launch_args = {"headless": True}
+            launch_args = {"headless": False}
+            context_args = {
+                "locale": "pl-PL",
+                "timezone_id": "Europe/Warsaw",
+                "ignore_https_errors": True
+            }
+
             if proxy_host and proxy_port:
-                launch_args["proxy"] = {
+                proxy_config = {
                     "server": f"http://{proxy_host}:{proxy_port}",
                 }
                 if proxy_user and proxy_pass:
-                    launch_args["proxy"]["username"] = proxy_user
-                    launch_args["proxy"]["password"] = proxy_pass
+                    proxy_config["username"] = proxy_user
+                    proxy_config["password"] = proxy_pass
+                launch_args["proxy"] = proxy_config
                 logger.info(f"Uruchamianie Playwright z proxy: {proxy_host}:{proxy_port}")
 
             browser = p.chromium.launch(**launch_args)
             # browser = p.chromium.launch(headless=False)
-            context = browser.new_context(
-                locale='pl-PL',
-                timezone_id='Europe/Warsaw',
-                ignore_https_errors=True
-            )
+            context = browser.new_context(**context_args)
             page = context.new_page()
+
+            def block_unnecessary_resources(route):
+                if route.request.resource_type in ["image", "font", "media"]:
+                    route.abort()
+                elif any(domain in route.request.url.lower() for domain in ["google-analytics", "googletagmanager", "hotjar", "facebook", "doubleclick", "analytics", "pixel"]):
+                    route.abort()
+                else:
+                    route.continue_()
+
+            page.route("**/*", block_unnecessary_resources)
             apply_stealth(page)
         except Exception as e:
             logger.critical(f"Nie udało się zainicjować przeglądarki Playwright: {e}")

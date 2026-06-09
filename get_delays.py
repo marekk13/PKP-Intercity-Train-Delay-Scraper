@@ -53,14 +53,23 @@ def parse_difficulties(difficulties_text: str) -> tuple:
     return parts[1].strip(), parts[2].strip() if len(parts) > 1 else None
 
 
-def get_train_details(page: Page, train_number: str, logger: logging.Logger):
+def get_train_details(page: Page, train_number: str, logger: logging.Logger, target_date: str = None):
     """Pobiera szczegółowe dane o trasie pociągu."""
-    logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
+    if target_date:
+        logger.info(f"Pobieranie danych dla pociągu nr: {train_number} z datą: {target_date}")
+    else:
+        logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
     input_field = page.locator("#ftnu-number")
     input_field.click()
     input_field.clear()
     input_field.press_sequentially(train_number, delay=100)
+
+    # Wypełnianie kalendarza jeśli podano target_date
+    if target_date:
+        date_input = page.locator("#ftnu-number-date")
+        date_input.fill(target_date)
+        date_input.evaluate("el => el.blur()")
 
     # Usunięcie focusu z pola (blur), co zamyka listę podpowiedzi (autocomplete) bez zamykania modala
     input_field.evaluate("el => el.blur()")
@@ -214,30 +223,49 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger):
     return route_details
 
 
-def process_single_train(page: Page, train: dict, logger: logging.Logger):
+def process_single_train(page: Page, train: dict, logger: logging.Logger, target_date: str = None):
     """Pobiera i parsuje dane dla pojedynczego pociągu."""
     train_number = train.get("number")
     if not train_number:
         logger.warning("Pominięto pociąg bez numeru w danych wejściowych.")
         return
 
-    try:
-        page.goto(URL, timeout=30000, wait_until='domcontentloaded')
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            page.goto(URL, timeout=30000, wait_until='domcontentloaded')
+    
+            # Wybór wyszukiwania po numerze
+            page.locator("span.find-train-selector").click()
+            page.locator("li:has-text('po numerze')").click()
+    
+            details = get_train_details(page, train_number, logger, target_date)
+            train["delay_info"] = details
+            
+            # Przerywamy pętlę retries jeśli udało się pobrać dane lub dostaliśmy znany stan w którym retry nie pomoże ("N/A")
+            if details not in ["page_load_timeout", "parsing_error", "not_found", "scraping_timeout", "unknown_error"]:
+                break
+                
+            if attempt < max_retries:
+                logger.info(f"Otrzymano błąd lub brak danych ({details}). Próba ponowienia ({attempt}/{max_retries})...")
+                time.sleep(2)
+            else:
+                logger.warning(f"Nie udało się pobrać danych dla pociągu {train_number} po {max_retries} próbach.")
 
-        # Wybór wyszukiwania po numerze
-        page.locator("span.find-train-selector").click()
-        page.locator("li:has-text('po numerze')").click()
-
-        details = get_train_details(page, train_number, logger)
-        train["delay_info"] = details
-
-    except TimeoutError as e:
-        logger.error(f"Timeout podczas przetwarzania pociągu {train_number}. Pomijanie. Błąd: {e}")
-        train["delay_info"] = "scraping_timeout"
-    except Exception as e:
-        logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number}. Pomijanie. Błąd: {e}",
-                     exc_info=True)
-        train["delay_info"] = "unknown_error"
+        except TimeoutError as e:
+            if attempt < max_retries:
+                logger.error(f"Timeout podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}")
+                time.sleep(2)
+            else:
+                logger.error(f"Timeout podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}")
+                train["delay_info"] = "scraping_timeout"
+        except Exception as e:
+            if attempt < max_retries:
+                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}")
+                time.sleep(2)
+            else:
+                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}", exc_info=True)
+                train["delay_info"] = "unknown_error"
 
 
 def get_delays(trains_data: list = None, logger=None) -> list:
@@ -257,25 +285,39 @@ def get_delays(trains_data: list = None, logger=None) -> list:
             proxy_user = os.environ.get("PROXY_USER")
             proxy_pass = os.environ.get("PROXY_PASSWORD")
 
+            
             launch_args = {"headless": True}
+            context_args = {
+                "locale": "pl-PL",
+                "timezone_id": "Europe/Warsaw",
+                "ignore_https_errors": True
+            }
+
             if proxy_host and proxy_port:
-                launch_args["proxy"] = {
+                proxy_config = {
                     "server": f"http://{proxy_host}:{proxy_port}",
                 }
                 if proxy_user and proxy_pass:
-                    launch_args["proxy"]["username"] = proxy_user
-                    launch_args["proxy"]["password"] = proxy_pass
+                    proxy_config["username"] = proxy_user
+                    proxy_config["password"] = proxy_pass
+                launch_args["proxy"] = proxy_config
                 logger.info(f"Uruchamianie Playwright z proxy: {proxy_host}:{proxy_port}")
 
             browser = p.chromium.launch(**launch_args)
-            context = browser.new_context(
-                locale='pl-PL',
-                timezone_id='Europe/Warsaw',
-                ignore_https_errors=True
-            )
+            context = browser.new_context(**context_args)
             page = context.new_page()
+
+            def block_unnecessary_resources(route):
+                if route.request.resource_type in ["image", "font", "media"]:
+                    route.abort()
+                elif any(domain in route.request.url.lower() for domain in ["google-analytics", "googletagmanager", "hotjar", "facebook", "doubleclick", "analytics", "pixel"]):
+                    route.abort()
+                else:
+                    route.continue_()
+
+            page.route("**/*", block_unnecessary_resources)
             apply_stealth(page)
-            logger.info("Pomyślnie uruchomiono przeglądarkę Playwright.")
+            logger.info("Pomyślnie uruchomiono przeglądarkę Playwright z filtrowaniem zasobów.")
         except Exception as e:
             logger.critical(f"Nie udało się uruchomić przeglądarki Playwright. Błąd: {e}")
             for train in trains_data:
@@ -292,7 +334,8 @@ def get_delays(trains_data: list = None, logger=None) -> list:
             logger.warning("Banner cookies nie pojawił się lub nie można było go kliknąć.")
 
         for train in trains_data:
-            process_single_train(page, train, logger)
+            target_date = train.get("target_date")
+            process_single_train(page, train, logger, target_date=target_date)
 
         browser.close()
         logger.info("Zakończono działanie przeglądarki Playwright.")
