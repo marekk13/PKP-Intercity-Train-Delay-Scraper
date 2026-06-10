@@ -114,7 +114,7 @@ def get_train_data(target_date: datetime.date, logger: logging.Logger) -> list:
             proxy_user = os.environ.get("PROXY_USER")
             proxy_pass = os.environ.get("PROXY_PASSWORD")
 
-            launch_args = {"headless": False}
+            launch_args = {"headless": True}
             context_args = {
                 "locale": "pl-PL",
                 "timezone_id": "Europe/Warsaw",
