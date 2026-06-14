@@ -12,7 +12,6 @@ from get_delays import get_delays
 from save_to_postgres import save_data
 
 def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
-    load_dotenv()
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
@@ -95,9 +94,14 @@ def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Skrypt łatający luki w opóźnieniach.")
-    parser.add_argument("--dates", nargs="+", required=True, help="Daty do sprawdzenia w formacie YYYY-MM-DD (np. 2026-06-08)")
+    load_dotenv()
+    parser = argparse.ArgumentParser(description="Skrypt łatający luki w opóźnieniach lub wczytujący dane z pliku.")
+    parser.add_argument("--dates", nargs="+", help="Daty do sprawdzenia w formacie YYYY-MM-DD (np. 2026-06-08)")
+    parser.add_argument("--file", help="Ścieżka do pliku JSON z danymi do wczytania i aktualizacji frekwencji")
     args = parser.parse_args()
+
+    if not args.dates and not args.file:
+        parser.error("Należy podać parametr --dates lub --file.")
 
     # Konfiguracja loggera specyficznego dla tego skryptu
     logger = logging.getLogger("patch_delays")
@@ -120,4 +124,16 @@ if __name__ == "__main__":
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
-    patch_delays_for_dates(args.dates, logger)
+    if args.file:
+        import json
+        logger.info(f"Wczytywanie danych z pliku: {args.file}")
+        try:
+            with open(args.file, "r", encoding="utf-8-sig") as f:
+                data = json.load(f)
+            logger.info(f"Pomyślnie wczytano {len(data)} rekordów. Rozpoczynanie zapisu i aktualizacji frekwencji.")
+            save_data(data, logger=logger, update_occupancy=True)
+            logger.info("Zakończono wczytywanie danych z pliku.")
+        except Exception as e:
+            logger.error(f"Błąd podczas wczytywania/zapisu danych z pliku: {e}", exc_info=True)
+    else:
+        patch_delays_for_dates(args.dates, logger)

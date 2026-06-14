@@ -349,7 +349,7 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
     return description, location
 
 
-def save_data(data_with_delays: list, logger: logging.Logger):
+def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: bool = False):
     """
     Zapisuje przetworzone dane pociągów do bazy danych PostgreSQL (Supabase),
     uwzględniając znormalizowany schemat i obsługę błędów.
@@ -459,12 +459,23 @@ def save_data(data_with_delays: list, logger: logging.Logger):
             response = supabase.table("train_runs").upsert(
                 run_to_insert,
                 on_conflict="service_id,date",
-                ignore_duplicates=True
+                ignore_duplicates=not update_occupancy
             ).execute()
 
             if response.data:
                 inserted_run_id = response.data[0]['id']
-                runs_inserted += 1
+                # Sprawdzamy, czy ten przejazd ma już przypisane przystanki
+                existing_stops = supabase.table("run_stops").select("id").eq("run_id", inserted_run_id).limit(1).execute()
+                if existing_stops.data:
+                    logger.info(
+                        f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje i ma zapisane przystanki. Zaktualizowano frekwencję.")
+                    runs_skipped += 1
+                    continue
+                else:
+                    if update_occupancy:
+                        logger.info(
+                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} istnieje w bazie (bez przystanków) lub jest nowy. Zaktualizowano frekwencję i trasę.")
+                    runs_inserted += 1
             else:
                 # Jeśli ignore_duplicates=True sprawiło, że nic nie wstawiono (bo wpis już istniał)
                 existing_run = supabase.table("train_runs").select("id").eq("service_id", service_id).eq("date", train_data.get("date")).execute()
