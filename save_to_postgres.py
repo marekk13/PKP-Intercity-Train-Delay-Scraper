@@ -191,16 +191,12 @@ def _clean_difficulty_text(desc: str) -> Tuple[str, str]:
     Zwraca krotkę: (wyodrębniona_lokalizacja, oczyszczony_opis).
     """
     desc_clean = desc
-    desc_clean = re.sub(r'\s*\(dot\..*?\)', '', desc_clean)
-    desc_clean = re.sub(r'\s*/układ.*?/', '', desc_clean)
+    desc_clean = re.sub(r'\s*\(dot\.[^)]*?\)', '', desc_clean)
+    desc_clean = re.sub(r'\s*/układ[^/]*?/', '', desc_clean)
     
     # Warunki pogodowe IMiGW
     if "IMiGW" in desc_clean:
         return None, "Trudne warunki atmosferyczne"
-        
-    # Honorowanie biletów
-    if "Wprowadzono wzajemne honorowanie" in desc_clean or "Wprowadzono honorowanie" in desc_clean:
-        return None, "Wzajemne honorowanie biletów"
         
     # Podział na zdania
     text_normalized = re.sub(r'\s+', ' ', desc_clean).strip()
@@ -301,6 +297,8 @@ def _map_difficulty_category(text: str) -> str:
         return "Inne"
     if "zdarzenie z pociągiem" in text_lower or "zdarzenie związane z prowadzeniem ruchu" in text_lower:
         return "Zdarzenie związane z prowadzeniem ruchu kolejowego"
+    if "mogą wystąpić opóźnienia" in text_lower or "może wystąpić opóźnienie" in text_lower:
+        return "Inne"
         
     clean_text = text_clean
     if clean_text.endswith("."):
