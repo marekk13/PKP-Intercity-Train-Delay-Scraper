@@ -289,8 +289,6 @@ def _map_difficulty_category(text: str) -> str:
         return "Wydłużone lokowanie pasażerów"
     if "wydłużone oczekiwanie" in text_lower:
         return "Wydłużone oczekiwanie na obsługę"
-    if "wzajemne honorowanie biletów" in text_lower or "wzajemne honorowania biletów" in text_lower or "honorowanie biletów" in text_lower:
-        return "Wzajemne honorowanie biletów"
     if "odwołany" in text_lower or "został odwołany" in text_lower:
         return "Pociąg odwołany"
     if "z przyczyn technicznych" in text_lower and "opóźnienia" in text_lower:
@@ -299,6 +297,9 @@ def _map_difficulty_category(text: str) -> str:
         return "Zdarzenie związane z prowadzeniem ruchu kolejowego"
     if "mogą wystąpić opóźnienia" in text_lower or "może wystąpić opóźnienie" in text_lower:
         return "Inne"
+    if "wzajemne honorowanie biletów" in text_lower or "wzajemne honorowania biletów" in text_lower or "honorowanie biletów" in text_lower:
+        return "Inne"
+        
         
     clean_text = text_clean
     if clean_text.endswith("."):
