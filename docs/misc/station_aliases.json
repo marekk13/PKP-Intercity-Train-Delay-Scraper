@@ -1,6 +1,7 @@
 {
   "Kraków Główny Osobowy": "Kraków Główny",
   "Gdynia Główna Osobowa": "Gdynia Główna",
+  "Warszawa Główna Osobowa": "Warszawa Główna",
   "Lublin": "Lublin Główny",
   "Rzeszów": "Rzeszów Główny",
   "Zielona Góra": "Zielona Góra Główna",
@@ -26,6 +27,7 @@
   "Wien Westbf": "Wien Westbahnhof",
   "Dnipro": "Dnipro-Holovnyi",
   "Dnipro Hl.": "Dnipro-Holovnyi",
+  "Dnepropetrovsk": "Dnipro-Holovnyi",
   "Harkov-Passajirs": "Kharkiv-Pasazhyrskyi",
   "Charków": "Kharkiv-Pasazhyrskyi",
   "Kiev-Passajirski": "Kyiv-Pasazhyrskyi",

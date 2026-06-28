@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import urllib.request
+import re
 from supabase import create_client, Client
 from typing import Dict, List, Any, Tuple, Set
 
@@ -16,6 +17,14 @@ def load_station_aliases() -> Dict[str, str]:
     return {}
 
 STATION_NAME_OVERRIDES = load_station_aliases()
+
+def _normalize_station_key(s: str) -> str:
+    """Zamienia myślniki i białe znaki na pojedynczą spację, małe litery, strip."""
+    return re.sub(r'[-\s]+', ' ', s).lower().strip()
+
+STATION_NAME_OVERRIDES_NORMALIZED = {
+    _normalize_station_key(k): v for k, v in STATION_NAME_OVERRIDES.items()
+}
 
 TRAIN_NAME_OVERRIDES = {
     "BACZYNSKI": "Baczyński",
@@ -144,8 +153,13 @@ def _get_or_create_id(supabase: Client, table_name: str, column_name: str, value
     Pobiera ID z cache'a lub tworzy nowy wpis w bazie danych, jeśli nie istnieje.
     Zwraca ID wpisu.
     """
-    if table_name == 'stations' and isinstance(value, str) and value in STATION_NAME_OVERRIDES:
-        value = STATION_NAME_OVERRIDES[value]
+    if table_name == 'stations' and isinstance(value, str):
+        if value in STATION_NAME_OVERRIDES:
+            value = STATION_NAME_OVERRIDES[value]
+        else:
+            norm_key = _normalize_station_key(value)
+            if norm_key in STATION_NAME_OVERRIDES_NORMALIZED:
+                value = STATION_NAME_OVERRIDES_NORMALIZED[norm_key]
 
     if value in cache:
         return cache[value]
