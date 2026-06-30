@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from get_delays import get_delays
 from save_to_postgres import save_data
 
-def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
+def patch_delays_for_dates(dates: list[str], logger: logging.Logger, overwrite: bool = False):
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
@@ -23,29 +23,49 @@ def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
     trains_to_scrape = []
 
     for date_str in dates:
-        logger.info(f"Pobieranie brakujących danych dla daty: {date_str}")
+        logger.info(f"Rozpoczęto analizę dla daty: {date_str} (overwrite={overwrite})")
         
         try:
             # 1. Pobierz wszystkie train_runs dla tej daty wraz z ich ID
             runs_response = supabase.table('train_runs').select('id, service_id, run_stops(id)').eq('date', date_str).execute()
             runs = runs_response.data
             
+            # Fallback jeśli brak jakichkolwiek rekordów dla tej daty
             if not runs:
-                logger.info(f"Brak rekordów train_runs dla daty {date_str}. Pomiń.")
+                logger.warning(f"Brak rekordów train_runs dla daty {date_str} w bazie. Fallback: pobieranie aktywnych usług z ostatnich 14 dni...")
+                from datetime import timedelta
+                parsed_d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                start_limit = (parsed_d - timedelta(days=7)).strftime("%Y-%m-%d")
+                end_limit = (parsed_d + timedelta(days=7)).strftime("%Y-%m-%d")
+                
+                recent_runs = supabase.table('train_runs').select('service_id').gte('date', start_limit).lte('date', end_limit).execute()
+                active_service_ids = list(set(r['service_id'] for r in recent_runs.data))
+                
+                if not active_service_ids:
+                    logger.error(f"Nie znaleziono żadnych aktywnych usług w przedziale {start_limit} - {end_limit}. Pomijam datę.")
+                    continue
+                
+                # Budujemy sztuczną listę runs do dalszego przetwarzania
+                runs = [{"service_id": sid, "run_stops": []} for sid in active_service_ids]
+            
+            # 2. Wybierz pociągi do przetworzenia w zależności od trybu
+            if overwrite:
+                target_runs = runs
+            else:
+                target_runs = [r for r in runs if not r.get('run_stops')]
+            
+            if not target_runs:
+                if overwrite:
+                    logger.info(f"Brak pociągów do przetworzenia dla daty {date_str}.")
+                else:
+                    logger.info(f"Brak luk w dacie {date_str}. Wszystkie train_runs posiadają odpowiadające run_stops.")
                 continue
                 
-            # 2. Odfiltruj te, które nie mają żadnego przypisanego rekordu w run_stops
-            missing_runs = [r for r in runs if not r.get('run_stops')]
+            logger.info(f"Do przetworzenia w dacie {date_str}: {len(target_runs)} pociągów (overwrite={overwrite}).")
             
-            if not missing_runs:
-                logger.info(f"Brak luk w dacie {date_str}. Wszystkie train_runs posiadają odpowiadające run_stops.")
-                continue
-                
-            logger.info(f"Znaleziono {len(missing_runs)} pociągów bez rekordów run_stops z dnia {date_str}.")
+            service_ids = list(set(r['service_id'] for r in target_runs))
             
-            service_ids = list(set(r['service_id'] for r in missing_runs))
-            
-            # 3. Pobierz szczegóły usług dla brakujących przejazdów
+            # 3. Pobierz szczegóły usług dla przejazdów
             services_response = supabase.table('train_services').select('id, number, name, is_domestic, category_id, start_station_id, end_station_id').in_('id', service_ids).execute()
             services = {s['id']: s for s in services_response.data}
             
@@ -60,8 +80,8 @@ def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
             parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
             target_date_formatted = parsed_date.strftime("%d.%m.%Y")
             
-            # 4. Budowanie listy danych wejściowych (zgodnie z formatem wejściowym get_delays)
-            for run in missing_runs:
+            # 4. Budowanie listy danych wejściowych
+            for run in target_runs:
                 service = services.get(run['service_id'])
                 if not service:
                     continue
@@ -74,22 +94,22 @@ def patch_delays_for_dates(dates: list[str], logger: logging.Logger):
                     "from": stations.get(service["start_station_id"], ""),
                     "to": stations.get(service["end_station_id"], ""),
                     "date": date_str,
-                    "target_date": target_date_formatted # Nowe pole do kalendarza
+                    "target_date": target_date_formatted
                 })
         except Exception as e:
-            logger.error(f"Błąd podczas odpytywania bazy danych dla daty {date_str}: {e}")
+            logger.error(f"Błąd podczas odpytywania bazy danych dla daty {date_str}: {e}", exc_info=True)
 
     if not trains_to_scrape:
         logger.info("Brak pociągów do przetworzenia.")
         return
 
-    logger.info(f"Łącznie pociągów do przetworzenia: {len(trains_to_scrape)}")
+    logger.info(f"Łącznie pociągów do przetworzenia ze wszystkich dat: {len(trains_to_scrape)}")
     
     # 5. Uruchomienie scrapera
     scraped_data = get_delays(trains_to_scrape, logger=logger)
     
     # 6. Zapisanie uzyskanych opóźnień do bazy
-    save_data(scraped_data, logger=logger)
+    save_data(scraped_data, logger=logger, overwrite=overwrite)
     logger.info("Zakończono łatanie danych.")
 
 
@@ -97,11 +117,23 @@ if __name__ == "__main__":
     load_dotenv()
     parser = argparse.ArgumentParser(description="Skrypt łatający luki w opóźnieniach lub wczytujący dane z pliku.")
     parser.add_argument("--dates", nargs="+", help="Daty do sprawdzenia w formacie YYYY-MM-DD (np. 2026-06-08)")
+    parser.add_argument("--yesterday", action="store_true", help="Uruchom dla wczorajszej daty")
+    parser.add_argument("--overwrite", action="store_true", help="Nadpisz istniejące dane w bazie, jeśli są różnice")
     parser.add_argument("--file", help="Ścieżka do pliku JSON z danymi do wczytania i aktualizacji frekwencji")
     args = parser.parse_args()
 
-    if not args.dates and not args.file:
-        parser.error("Należy podać parametr --dates lub --file.")
+    dates = []
+    if args.dates:
+        dates.extend(args.dates)
+    if args.yesterday:
+        from datetime import timedelta
+        from zoneinfo import ZoneInfo
+        warsaw_tz = ZoneInfo("Europe/Warsaw")
+        yesterday_str = (datetime.now(warsaw_tz) - timedelta(days=1)).strftime("%Y-%m-%d")
+        dates.append(yesterday_str)
+
+    if not dates and not args.file:
+        parser.error("Należy podać parametr --dates, --yesterday lub --file.")
 
     # Konfiguracja loggera specyficznego dla tego skryptu
     logger = logging.getLogger("patch_delays")
@@ -113,16 +145,17 @@ if __name__ == "__main__":
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
 
-    # Handler dla pliku logów
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_dir = os.path.join(base_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"patch_delays_{timestamp}.log")
+    # Handler dla pliku logów (tylko poza GitHub Actions / CI)
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_dir = os.path.join(base_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(log_dir, f"patch_delays_{timestamp}.log")
 
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
     if args.file:
         import json
@@ -131,9 +164,9 @@ if __name__ == "__main__":
             with open(args.file, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             logger.info(f"Pomyślnie wczytano {len(data)} rekordów. Rozpoczynanie zapisu i aktualizacji frekwencji.")
-            save_data(data, logger=logger, update_occupancy=True)
+            save_data(data, logger=logger, update_occupancy=True, overwrite=args.overwrite)
             logger.info("Zakończono wczytywanie danych z pliku.")
         except Exception as e:
             logger.error(f"Błąd podczas wczytywania/zapisu danych z pliku: {e}", exc_info=True)
     else:
-        patch_delays_for_dates(args.dates, logger)
+        patch_delays_for_dates(dates, logger, overwrite=args.overwrite)

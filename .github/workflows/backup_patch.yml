@@ -1,0 +1,48 @@
+name: Run Backup Patch Delays
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: self-hosted
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPO: ${{ github.repository }}
+      PROXY_HOST: ${{ secrets.PROXY_HOST }}
+      PROXY_PORT: ${{ secrets.PROXY_PORT }}
+      PROXY_USER: ${{ secrets.PROXY_USER }}
+      PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv run playwright install chromium
+
+      - name: Run patch delays for yesterday
+        run: |
+          uv run python scripts/patch_delays.py --yesterday --overwrite
+
+      - name: Commit new stations if discovered
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/misc/stations.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(stations): add newly discovered stations [skip ci]"
+            git push
+          else
+            echo "No new stations discovered, nothing to commit."
+          fi

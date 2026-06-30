@@ -362,7 +362,25 @@ def _parse_difficulty(info_array: List[str]) -> Tuple[str, str]:
     return description, location
 
 
-def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: bool = False):
+def normalize_time(t: str) -> str:
+    """Sprowadza format czasu (np. '14:35:00' lub '14:35') do spójnego formatu 'HH:MM'."""
+    if not t:
+        return None
+    t_str = str(t).strip()
+    if len(t_str) > 5 and t_str[2] == ':' and t_str[5] == ':':
+        return t_str[:5]
+    return t_str
+
+def normalize_distance(d) -> float:
+    """Zaokrągla dystans do dwóch miejsc po przecinku w celu uniknięcia problemów z dokładnością float."""
+    if d is None:
+        return 0.0
+    try:
+        return round(float(d), 2)
+    except (ValueError, TypeError):
+        return 0.0
+
+def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: bool = False, overwrite: bool = False):
     """
     Zapisuje przetworzone dane pociągów do bazy danych PostgreSQL (Supabase),
     uwzględniając znormalizowany schemat i obsługę błędów.
@@ -466,56 +484,175 @@ def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: 
             run_to_insert = {
                 "service_id": service_id,
                 "date": train_data.get("date"),
-                "occupancy_id": occupancy_id
+                "occupancy_id": occupancy_id,
+                "is_cancelled": train_data.get("is_cancelled", False)
             }
 
             response = supabase.table("train_runs").upsert(
                 run_to_insert,
                 on_conflict="service_id,date",
-                ignore_duplicates=not update_occupancy
+                ignore_duplicates=not (update_occupancy or overwrite)
             ).execute()
 
+            inserted_run_id = None
             if response.data:
                 inserted_run_id = response.data[0]['id']
-                # Sprawdzamy, czy ten przejazd ma już przypisane przystanki
-                existing_stops = supabase.table("run_stops").select("id").eq("run_id", inserted_run_id).limit(1).execute()
-                if existing_stops.data:
-                    logger.info(
-                        f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje i ma zapisane przystanki. Zaktualizowano frekwencję.")
-                    runs_skipped += 1
-                    continue
-                else:
-                    if update_occupancy:
-                        logger.info(
-                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} istnieje w bazie (bez przystanków) lub jest nowy. Zaktualizowano frekwencję i trasę.")
-                    runs_inserted += 1
             else:
-                # Jeśli ignore_duplicates=True sprawiło, że nic nie wstawiono (bo wpis już istniał)
                 existing_run = supabase.table("train_runs").select("id").eq("service_id", service_id).eq("date", train_data.get("date")).execute()
                 if existing_run.data:
                     inserted_run_id = existing_run.data[0]['id']
-                    # Sprawdzamy, czy ten przejazd ma już przypisane przystanki
-                    existing_stops = supabase.table("run_stops").select("id").eq("run_id", inserted_run_id).limit(1).execute()
-                    if existing_stops.data:
-                        logger.info(
-                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje i ma zapisane przystanki. Pomijanie.")
-                        runs_skipped += 1
-                        continue
-                    else:
-                        logger.info(
-                            f"Pociąg nr {train_number} z dnia {train_data.get('date')} istnieje w bazie (bez przystanków). Uzupełnianie trasy.")
-                        runs_skipped += 1
-                else:
-                    logger.error(
-                        f"Pociąg nr {train_number} z dnia {train_data.get('date')}: Nie udało się uzyskać ani utworzyć przejazdu. Pomijanie.")
-                    runs_with_errors += 1
-                    continue
+
+            if not inserted_run_id:
+                logger.error(
+                    f"Pociąg nr {train_number} z dnia {train_data.get('date')}: Nie udało się uzyskać ani utworzyć przejazdu. Pomijanie.")
+                runs_with_errors += 1
+                continue
+
+            # Sprawdzamy, czy ten przejazd ma już przypisane przystanki
+            existing_stops_res = supabase.table("run_stops").select("*").eq("run_id", inserted_run_id).order("stop_order").execute()
+            existing_stops = existing_stops_res.data
 
             delay_info = train_data.get("delay_info")
+
+            if existing_stops and not overwrite:
+                logger.info(
+                    f"Pociąg nr {train_number} z dnia {train_data.get('date')} już istnieje i ma zapisane przystanki. Pomijanie.")
+                runs_skipped += 1
+                continue
+
             if not isinstance(delay_info, list):
                 logger.warning(
-                    f"Pociąg nr {train_number}: Brak szczegółowych danych o trasie (delay_info = '{delay_info}'). Wstawiono tylko główny rekord przejazdu.")
+                    f"Pociąg nr {train_number}: Brak szczegółowych danych o trasie (delay_info = '{delay_info}'). Pomijanie aktualizacji trasy.")
                 continue
+
+            def get_station_id_from_cache(name: str) -> int:
+                if not name:
+                    return None
+                val = name
+                if val in STATION_NAME_OVERRIDES:
+                    val = STATION_NAME_OVERRIDES[val]
+                else:
+                    norm_key = _normalize_station_key(val)
+                    if norm_key in STATION_NAME_OVERRIDES_NORMALIZED:
+                        val = STATION_NAME_OVERRIDES_NORMALIZED[norm_key]
+                return stations_cache.get(val)
+
+            # Porównywanie danych, jeśli overwrite jest włączone i istnieją przystanki w bazie
+            is_data_identical = True
+            if overwrite and existing_stops:
+                # 1. Porównujemy status anulowania i frekwencję przejazdu
+                existing_run_res = supabase.table("train_runs").select("is_cancelled, occupancy_id").eq("id", inserted_run_id).single().execute()
+                existing_run_db = existing_run_res.data
+                if existing_run_db:
+                    db_cancelled = bool(existing_run_db.get("is_cancelled", False))
+                    scr_cancelled = bool(train_data.get("is_cancelled", False))
+                    db_occupancy = existing_run_db.get("occupancy_id")
+                    scr_occupancy = occupancy_id
+                    if db_cancelled != scr_cancelled or db_occupancy != scr_occupancy:
+                        is_data_identical = False
+                else:
+                    is_data_identical = False
+
+                # 2. Porównujemy liczbę przystanków
+                if is_data_identical and len(existing_stops) != len(delay_info):
+                    is_data_identical = False
+
+                # 3. Szczegółowe porównanie każdego przystanku i utrudnień
+                if is_data_identical:
+                    # Pobieramy utrudnienia dla starych przystanków
+                    existing_stop_ids = [s['id'] for s in existing_stops]
+                    existing_diffs = []
+                    if existing_stop_ids:
+                        existing_diffs = supabase.table("run_stop_difficulties").select("stop_id, difficulty_id, location").in_("stop_id", existing_stop_ids).execute().data
+                    
+                    db_diffs_by_stop = {}
+                    for d in existing_diffs:
+                        db_diffs_by_stop.setdefault(d['stop_id'], []).append(d)
+
+                    lagged_distance = 0.0
+                    for i, stop_data in enumerate(delay_info):
+                        db_stop = existing_stops[i]
+                        
+                        current_distance = lagged_distance
+                        next_segment = stop_data.get("distance_km_from_start_to_next")
+                        if isinstance(next_segment, (int, float)):
+                            lagged_distance = next_segment
+
+                        db_arr = normalize_time(db_stop.get("scheduled_arrival"))
+                        scr_arr = normalize_time(stop_data.get("arrival_time"))
+                        db_dep = normalize_time(db_stop.get("scheduled_departure"))
+                        scr_dep = normalize_time(stop_data.get("departure_time"))
+                        db_arr_delay = db_stop.get("delay_arrival_min")
+                        scr_arr_delay = stop_data.get("delay_minutes_arrival")
+                        db_dep_delay = db_stop.get("delay_departure_min")
+                        scr_dep_delay = stop_data.get("delay_minutes_departure")
+                        
+                        db_station_id = db_stop.get("station_id")
+                        scr_station_id = get_station_id_from_cache(stop_data.get("station_name"))
+
+                        if (db_station_id != scr_station_id or
+                            db_stop.get("stop_order") != i + 1 or
+                            db_arr != scr_arr or
+                            db_dep != scr_dep or
+                            db_arr_delay != scr_arr_delay or
+                            db_dep_delay != scr_dep_delay or
+                            normalize_distance(db_stop.get("distance_from_start_km")) != normalize_distance(current_distance) or
+                            bool(db_stop.get("is_cancelled", False)) != bool(stop_data.get("is_cancelled", False))):
+                            is_data_identical = False
+                            break
+
+                        # Porównanie utrudnień na danym przystanku
+                        desc, loc = _parse_difficulty(stop_data.get("difficulties_info"))
+                        db_diffs = db_diffs_by_stop.get(db_stop['id'], [])
+                        scraped_has_diff = desc is not None
+                        db_has_diff = len(db_diffs) > 0
+
+                        if scraped_has_diff != db_has_diff:
+                            is_data_identical = False
+                            break
+
+                        if scraped_has_diff:
+                            scraped_diff_id = difficulties_cache.get(desc)
+                            if not scraped_diff_id:
+                                is_data_identical = False
+                                break
+
+                            match_found = False
+                            for df in db_diffs:
+                                loc_db = df.get('location') or ""
+                                loc_scr = loc or ""
+                                if df['difficulty_id'] == scraped_diff_id and loc_db.strip() == loc_scr.strip():
+                                    match_found = True
+                                    break
+                            if not match_found:
+                                is_data_identical = False
+                                break
+            else:
+                # W przypadku gdy existing_stops jest puste, dane nie są identyczne (musimy wstawić)
+                if not existing_stops:
+                    is_data_identical = False
+
+            if is_data_identical:
+                logger.info(f"Pociąg nr {train_number} z dnia {train_data.get('date')}: Dane są identyczne. Pomijanie zapisu.")
+                runs_skipped += 1
+                continue
+            else:
+                if existing_stops:
+                    logger.info(f"Pociąg nr {train_number} z dnia {train_data.get('date')}: Wykryto różnice. Nadpisywanie przystanków...")
+                    existing_stop_ids = [s['id'] for s in existing_stops]
+                    if existing_stop_ids:
+                        supabase.table("run_stop_difficulties").delete().in_("stop_id", existing_stop_ids).execute()
+                    supabase.table("run_stops").delete().eq("run_id", inserted_run_id).execute()
+
+                    # Aktualizacja właściwości przejazdu
+                    supabase.table("train_runs").update({
+                        "is_cancelled": train_data.get("is_cancelled", False),
+                        "occupancy_id": occupancy_id
+                    }).eq("id", inserted_run_id).execute()
+                else:
+                    if update_occupancy:
+                        logger.info(f"Pociąg nr {train_number} z dnia {train_data.get('date')} jest nowy lub brakowało przystanków. Wyszukiwanie/tworzenie...")
+                runs_inserted += 1
 
             stops_to_insert = []
             lagged_distance = 0.0
@@ -540,7 +677,8 @@ def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: 
                     "scheduled_departure": stop_data.get("departure_time"),
                     "delay_arrival_min": stop_data.get("delay_minutes_arrival"),
                     "delay_departure_min": stop_data.get("delay_minutes_departure"),
-                    "distance_from_start_km": current_distance
+                    "distance_from_start_km": current_distance,
+                    "is_cancelled": stop_data.get("is_cancelled", False)
                 })
 
             if not stops_to_insert:

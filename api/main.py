@@ -33,6 +33,8 @@ app = FastAPI(title="Train Delays API")
 
 origins = [
     "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
     "https://marekk13.github.io",
     "https://spoznienia.me",
 ]
@@ -119,6 +121,7 @@ class TrainSummary(BaseModel):
     scheduled_departure: Optional[str]
     scheduled_arrival: Optional[str]
     delay_at_destination: Optional[int] = 0
+    is_cancelled: bool = False
 
 class StationScheduleItem(BaseModel):
     train_number: str
@@ -144,6 +147,7 @@ class StopDetail(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     difficulties: List[dict] = []
+    is_cancelled: bool = False
 
 class TrainDetail(TrainSummary):
     stops: List[StopDetail]
@@ -281,7 +285,8 @@ def get_train_detail(request: Request, train_id: str, db: Client = Depends(get_d
             is_domestic=s['stations']['is_domestic'],
             latitude=s['stations'].get('latitude'),
             longitude=s['stations'].get('longitude'),
-            difficulties=diffs
+            difficulties=diffs,
+            is_cancelled=s.get('is_cancelled', False)
         ))
         
     return {**train, "stops": stops_data}

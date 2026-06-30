@@ -83,14 +83,14 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
 
     try:
         page.wait_for_selector(
-            "div.catalog-table, h3:has-text('W obecnej dobie brak kursujących pociągów'), div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')",
+            "div.catalog-table, h3:has-text('dobie brak kursujących pociągów'), h3:has-text('brak kursujących pociągów'), div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')",
             timeout=15000
         )
     except TimeoutError:
         logger.warning(f"Strona nie załadowała wyników ani komunikatu o błędzie dla pociągu {train_number}.")
         return "page_load_timeout"
 
-    no_train_msg = page.locator("h3:has-text('W obecnej dobie brak kursujących pociągów')")
+    no_train_msg = page.locator("h3:has-text('dobie brak kursujących pociągów'), h3:has-text('brak kursujących pociągów')").first
     if no_train_msg.is_visible():
         logger.warning(
             f"Nie znaleziono pociągu o numerze {train_number}. Komunikat strony: '{no_train_msg.inner_text().strip()}'")
@@ -152,48 +152,52 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
         return "not_found"
 
     # parsowanie listy stacji
-    station_items = page.locator("div.timeline--connection > div.timeline__item").all()
+    station_items = page.locator("div.timeline--connection div.timeline__item:not(.timeline__item-detour)").all()
     route_details = []
 
     for item in station_items:
-        raw_station_name = item.locator("h3.timeline__content-station").inner_text().split(":", 1)[-1].strip()
+        raw_station_name = item.locator("h3.timeline__content-station").first.inner_text().split(":", 1)[-1].strip()
         station_name = re.sub(r'(?i)\s*przesiadka$', '', raw_station_name).strip()
 
+        # Detekcja stacji odwołanej
+        is_cancelled = False
+        hidden_span = item.locator("span.visuallyhidden").first
+        if hidden_span.count() > 0:
+            is_cancelled = "odwołan" in hidden_span.inner_text().lower()
+
         arrival_time = None
-        arrival_locator = item.locator("span.timeline__numbers-time__stop")
+        arrival_locator = item.locator("span.timeline__numbers-time__stop").first
         if arrival_locator.count() > 0:
             arr_time_text = arrival_locator.inner_text()
             arrival_time = arr_time_text.split('\n')[1].strip() if '\n' in arr_time_text else None
 
         departure_time = None
-        departure_locator = item.locator("span.timeline__numbers-time__start")
+        departure_locator = item.locator("span.timeline__numbers-time__start").first
         if departure_locator.count() > 0:
             dep_time_text = departure_locator.inner_text()
             departure_time = dep_time_text.split('\n')[1].strip() if '\n' in dep_time_text else None
 
         delay_minutes_arrival = None
-        delay_arr_locator = item.locator("span.timeline__numbers-time__stop span.inlinedelay, span.timeline__numbers-time__stop span.blockdelay")
+        delay_arr_locator = item.locator("span.timeline__numbers-time__stop span.inlinedelay, span.timeline__numbers-time__stop span.blockdelay").first
         if delay_arr_locator.count() > 0:
-            all_texts = delay_arr_locator.all_inner_texts()
-            delay_minutes_arrival = parse_delay(all_texts[-1]) if all_texts else 0
+            delay_minutes_arrival = parse_delay(delay_arr_locator.inner_text())
         elif arrival_time is not None:
             delay_minutes_arrival = 0
 
         delay_minutes_departure = None
-        delay_depart_locator = item.locator("span.timeline__numbers-time__start span.inlinedelay, span.timeline__numbers-time__start span.blockdelay")
+        delay_depart_locator = item.locator("span.timeline__numbers-time__start span.inlinedelay, span.timeline__numbers-time__start span.blockdelay").first
         if delay_depart_locator.count() > 0:
-            all_texts = delay_depart_locator.all_inner_texts()
-            delay_minutes_departure = parse_delay(all_texts[-1]) if all_texts else 0
+            delay_minutes_departure = parse_delay(delay_depart_locator.inner_text())
         elif departure_time is not None:
             delay_minutes_departure = 0
 
         info_text = ""
-        info_locator = item.locator("p.timeline__numbers-km")
+        info_locator = item.locator("p.timeline__numbers-km").first
         if info_locator.count() > 0:
             info_text = info_locator.inner_text()
         distance_km, travel_time_to_next = parse_distance_and_time_info(info_text)
 
-        difficulties_btn = item.locator("button[data-window-type='difficulties']")
+        difficulties_btn = item.locator("button[data-window-type='difficulties']").first
         station_diff, difficulties_reason = "", ""
         if difficulties_btn.count() > 0:
             data_obj_1_value = difficulties_btn.get_attribute("data-obj-1")
@@ -216,6 +220,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
             "delay_minutes_arrival": delay_minutes_arrival, "delay_minutes_departure": delay_minutes_departure,
             "distance_km_from_start_to_next": distance_km, "travel_time_from_start_to_next": travel_time_to_next,
             "difficulties_info": [difficulties_reason, station_diff],
+            "is_cancelled": is_cancelled
         })
 
     logger.info(f"Pomyślnie pobrano dane dla {len(route_details)} stacji dla pociągu {train_number}.")
@@ -241,6 +246,11 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger, target
     
             details = get_train_details(page, train_number, logger, target_date)
             train["delay_info"] = details
+            if isinstance(details, list) and details:
+                is_run_cancelled = all(stop.get("is_cancelled", False) for stop in details)
+                train["is_cancelled"] = is_run_cancelled
+            else:
+                train["is_cancelled"] = False
             
             # Przerywamy pętlę retries jeśli udało się pobrać dane lub dostaliśmy znany stan w którym retry nie pomoże ("N/A")
             if details not in ["page_load_timeout", "parsing_error", "not_found", "scraping_timeout", "unknown_error"]:

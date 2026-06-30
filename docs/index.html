@@ -1614,7 +1614,6 @@
                     if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
                     return 0;
                 });
-                
                 renderSearchResults();
             }
         };
@@ -1622,7 +1621,6 @@
         function renderSearchResults() {
             const tbody = document.getElementById('search-results-body');
             tbody.innerHTML = '';
-            
             appState.searchResults.forEach(train => {
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-blue-50/40 transition-colors group cursor-pointer";
@@ -1630,7 +1628,13 @@
                     if(!event.target.closest('button')) openDetailModal(train.id);
                 };
 
-                const d = getDelayStyling(train.delay_at_destination);
+                let dHtml = '';
+                if (train.is_cancelled) {
+                    dHtml = `<span class="px-2 py-1 rounded inline-block text-[11px] font-bold uppercase tracking-wide bg-red-100 text-red-700 shadow-sm">Odwołany</span>`;
+                } else {
+                    const d = getDelayStyling(train.delay_at_destination);
+                    dHtml = `<span class="${d.class} bg-slate-50 px-2 py-1 rounded inline-block">${d.text}</span>`;
+                }
 
                 tr.innerHTML = `
                     <td class="py-4 px-5 align-middle">
@@ -1646,7 +1650,7 @@
                         <div class="text-xs text-slate-400 mt-0.5">Planowo: ${train.scheduled_arrival ? train.scheduled_arrival.substring(0,5) : '-'}</div>
                     </td>
                     <td class="py-4 px-5 align-middle text-right">
-                        <span class="${d.class} bg-slate-50 px-2 py-1 rounded inline-block">${d.text}</span>
+                        ${dHtml}
                     </td>
                     <td class="py-4 px-5 align-middle text-center">
                         <button onclick="openDetailModal('${train.id}')" class="text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-600 hover:text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all shadow-sm">
@@ -2081,7 +2085,12 @@
                 const cleanTo = cleanStationName(data.to_station);
                 document.getElementById('detail-subtitle').textContent = `Data odjazdu: ${data.date} | Relacja: ${cleanFrom !== '-' ? cleanFrom : 'Nieznana'} → ${cleanTo !== '-' ? cleanTo : 'Nieznana'}`;
                 
-                if (data.delay_at_destination !== null) {
+                if (data.is_cancelled) {
+                    const badge = document.getElementById('detail-badge');
+                    badge.classList.remove('hidden');
+                    badge.className = "px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-red-100 text-red-700 shadow-sm ml-3";
+                    badge.textContent = "Odwołany";
+                } else if (data.delay_at_destination !== null) {
                     const badge = document.getElementById('detail-badge');
                     badge.classList.remove('hidden');
                     badge.textContent = `Opóźnienie na mecie: ${data.delay_at_destination} min`;
@@ -2125,9 +2134,15 @@
                         const maxDelay = Math.max(stop.delay_minutes_arrival || 0, stop.delay_minutes_departure || 0);
                         
                         let dotColor = 'bg-blue-500 ring-blue-100 border-white';
-                        if (maxDelay > 20) dotColor = 'bg-red-500 ring-red-100 border-white shadow-[0_0_10px_rgba(239,68,68,0.5)]';
-                        else if (maxDelay > 5) dotColor = 'bg-amber-400 ring-amber-100 border-white';
-                        else if (maxDelay > 0) dotColor = 'bg-emerald-400 ring-emerald-100 border-white';
+                        if (stop.is_cancelled) {
+                            dotColor = 'bg-slate-300 ring-slate-100 border-white';
+                        } else if (maxDelay > 20) {
+                            dotColor = 'bg-red-500 ring-red-100 border-white shadow-[0_0_10px_rgba(239,68,68,0.5)]';
+                        } else if (maxDelay > 5) {
+                            dotColor = 'bg-amber-400 ring-amber-100 border-white';
+                        } else if (maxDelay > 0) {
+                            dotColor = 'bg-emerald-400 ring-emerald-100 border-white';
+                        }
 
                         // Arrival and Departure Blocks
                         const arrDelay = getDelayStyling(stop.delay_minutes_arrival);
@@ -2162,8 +2177,9 @@
                                     ${isLast ? '<div class="absolute top-0 right-0 bg-slate-200 text-slate-700 text-[10px] font-bold uppercase px-3 py-1 rounded-bl-lg">Koniec</div>' : ''}
 
                                     <div class="flex justify-between items-start flex-wrap gap-2 mb-3 pr-12">
-                                        <h4 class="text-lg font-bold text-slate-800 flex items-center">
-                                            ${stop.station_name}
+                                        <h4 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                            ${stop.is_cancelled ? `<span class="line-through text-slate-400">${stop.station_name}</span>` : stop.station_name}
+                                            ${stop.is_cancelled ? '<span class="bg-red-100 text-red-700 text-[10px] font-bold uppercase px-2 py-0.5 rounded">Odwołana</span>' : ''}
                                         </h4>
                                         ${stop.is_domestic && stop.distance_from_start_km !== null ? `
                                         <div class="text-[11px] font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded-md border border-slate-200 font-semibold shadow-sm">
@@ -2177,16 +2193,16 @@
                                         <div class="flex flex-col p-2.5 rounded-xl bg-slate-50/50 border border-slate-100">
                                             <span class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Plan. Przyjazd</span>
                                             <div class="flex justify-between items-baseline gap-2">
-                                                <span class="font-mono text-base font-bold text-slate-900">${formatTime(stop.arrival_time)}</span>
-                                                <span class="text-xs ${arrDelay.class}">${arrDelay.raw > 0 ? arrDelay.text : (stop.arrival_time ? arrDelay.text : '')}</span>
+                                                <span class="font-mono text-base font-bold ${stop.is_cancelled ? 'line-through text-slate-400' : 'text-slate-900'}">${formatTime(stop.arrival_time)}</span>
+                                                <span class="text-xs ${stop.is_cancelled ? 'text-red-600 font-bold' : arrDelay.class}">${stop.is_cancelled ? 'Odwołana' : (arrDelay.raw > 0 ? arrDelay.text : (stop.arrival_time ? arrDelay.text : ''))}</span>
                                             </div>
                                         </div>
                                         <!-- Odjazd -->
                                         <div class="flex flex-col p-2.5 rounded-xl bg-slate-50/50 border border-slate-100">
                                             <span class="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Plan. Odjazd</span>
                                             <div class="flex justify-between items-baseline gap-2">
-                                                <span class="font-mono text-base font-bold text-slate-900">${formatTime(stop.departure_time)}</span>
-                                                <span class="text-xs ${depDelay.class}">${depDelay.raw > 0 ? depDelay.text : (stop.departure_time ? depDelay.text : '')}</span>
+                                                <span class="font-mono text-base font-bold ${stop.is_cancelled ? 'line-through text-slate-400' : 'text-slate-900'}">${formatTime(stop.departure_time)}</span>
+                                                <span class="text-xs ${stop.is_cancelled ? 'text-red-600 font-bold' : depDelay.class}">${stop.is_cancelled ? 'Odwołana' : (depDelay.raw > 0 ? depDelay.text : (stop.departure_time ? depDelay.text : ''))}</span>
                                             </div>
                                         </div>
                                     </div>
