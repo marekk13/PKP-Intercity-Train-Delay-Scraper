@@ -481,6 +481,16 @@ def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: 
                 runs_with_errors += 1
                 continue
 
+            # Sprawdzamy czy przejazd już istnieje w bazie przed upsertem, aby zachować frekwencję (np. gdy patch_delays nie ma danych o frekwencji)
+            existing_run_db = None
+            existing_run_res = supabase.table("train_runs").select("id, occupancy_id, is_cancelled").eq("service_id", service_id).eq("date", train_data.get("date")).execute()
+            if existing_run_res.data:
+                existing_run_db = existing_run_res.data[0]
+
+            # Jeśli nie przekazano frekwencji (np. w patch_delays), zachowaj dotychczasową z bazy
+            if not train_data.get("occupancy") and existing_run_db:
+                occupancy_id = existing_run_db.get("occupancy_id")
+
             run_to_insert = {
                 "service_id": service_id,
                 "date": train_data.get("date"),
@@ -497,10 +507,8 @@ def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: 
             inserted_run_id = None
             if response.data:
                 inserted_run_id = response.data[0]['id']
-            else:
-                existing_run = supabase.table("train_runs").select("id").eq("service_id", service_id).eq("date", train_data.get("date")).execute()
-                if existing_run.data:
-                    inserted_run_id = existing_run.data[0]['id']
+            elif existing_run_db:
+                inserted_run_id = existing_run_db['id']
 
             if not inserted_run_id:
                 logger.error(
@@ -541,8 +549,6 @@ def save_data(data_with_delays: list, logger: logging.Logger, update_occupancy: 
             is_data_identical = True
             if overwrite and existing_stops:
                 # 1. Porównujemy status anulowania i frekwencję przejazdu
-                existing_run_res = supabase.table("train_runs").select("is_cancelled, occupancy_id").eq("id", inserted_run_id).single().execute()
-                existing_run_db = existing_run_res.data
                 if existing_run_db:
                     db_cancelled = bool(existing_run_db.get("is_cancelled", False))
                     scr_cancelled = bool(train_data.get("is_cancelled", False))

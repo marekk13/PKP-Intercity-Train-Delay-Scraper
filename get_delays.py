@@ -24,23 +24,22 @@ def parse_delay(delay_text: str) -> int:
 
 
 def parse_distance_and_time_info(info_text: str) -> tuple:
-    """Wyciąga dystans i czas przejazdu z tekstu rozdzielonego nową linią."""
+    """Wyciąga dystans i czas przejazdu z tekstu."""
     if not info_text:
         return None, None
 
-    parts = info_text.strip().split('\n')
     distance_km = None
     travel_time = None
 
-    if len(parts) > 1:
-        distance_match = re.search(r'([\d,\.]+)\s*km', parts[1])
-        if distance_match:
-            distance_km = float(distance_match.group(1).replace(',', '.'))
+    # Wyszukiwanie dystansu (np. 12.6 km lub 12,6 km) w całym tekście
+    distance_match = re.search(r'([\d,\.]+)\s*km', info_text)
+    if distance_match:
+        distance_km = float(distance_match.group(1).replace(',', '.'))
 
-    if len(parts) > 3:
-        time_match = re.search(r'(\d+h:\d+min)', parts[3])
-        if time_match:
-            travel_time = time_match.group(1)
+    # Wyszukiwanie czasu przejazdu (np. 12h:14min) w całym tekście
+    time_match = re.search(r'(\d+h:\d+min)', info_text)
+    if time_match:
+        travel_time = time_match.group(1)
 
     return distance_km, travel_time
 
@@ -166,30 +165,24 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
             is_cancelled = "odwołan" in hidden_span.inner_text().lower()
 
         arrival_time = None
+        delay_minutes_arrival = 0
         arrival_locator = item.locator("span.timeline__numbers-time__stop").first
         if arrival_locator.count() > 0:
-            arr_time_text = arrival_locator.inner_text()
-            arrival_time = arr_time_text.split('\n')[1].strip() if '\n' in arr_time_text else None
+            arr_time_text = arrival_locator.text_content() or ""
+            time_match = re.search(r'\b(\d{2}:\d{2})\b', arr_time_text)
+            if time_match:
+                arrival_time = time_match.group(1)
+            delay_minutes_arrival = parse_delay(arr_time_text)
 
         departure_time = None
+        delay_minutes_departure = 0
         departure_locator = item.locator("span.timeline__numbers-time__start").first
         if departure_locator.count() > 0:
-            dep_time_text = departure_locator.inner_text()
-            departure_time = dep_time_text.split('\n')[1].strip() if '\n' in dep_time_text else None
-
-        delay_minutes_arrival = None
-        delay_arr_locator = item.locator("span.timeline__numbers-time__stop span.inlinedelay, span.timeline__numbers-time__stop span.blockdelay").first
-        if delay_arr_locator.count() > 0:
-            delay_minutes_arrival = parse_delay(delay_arr_locator.inner_text())
-        elif arrival_time is not None:
-            delay_minutes_arrival = 0
-
-        delay_minutes_departure = None
-        delay_depart_locator = item.locator("span.timeline__numbers-time__start span.inlinedelay, span.timeline__numbers-time__start span.blockdelay").first
-        if delay_depart_locator.count() > 0:
-            delay_minutes_departure = parse_delay(delay_depart_locator.inner_text())
-        elif departure_time is not None:
-            delay_minutes_departure = 0
+            dep_time_text = departure_locator.text_content() or ""
+            time_match = re.search(r'\b(\d{2}:\d{2})\b', dep_time_text)
+            if time_match:
+                departure_time = time_match.group(1)
+            delay_minutes_departure = parse_delay(dep_time_text)
 
         info_text = ""
         info_locator = item.locator("p.timeline__numbers-km").first
@@ -223,9 +216,45 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
             "is_cancelled": is_cancelled
         })
 
-    logger.info(f"Pomyślnie pobrano dane dla {len(route_details)} stacji dla pociągu {train_number}.")
+    # Usunięcie duplikatów stacji (np. przy częściowo odwołanych pociągach)
+    merged_route_details = []
+    station_index_map = {}
 
-    return route_details
+    for stop in route_details:
+        name = stop["station_name"]
+        if name not in station_index_map:
+            station_index_map[name] = len(merged_route_details)
+            merged_route_details.append(stop)
+        else:
+            existing_stop = merged_route_details[station_index_map[name]]
+
+            # Scalanie czasów i opóźnień
+            if stop.get("arrival_time") and not existing_stop.get("arrival_time"):
+                existing_stop["arrival_time"] = stop["arrival_time"]
+                existing_stop["delay_minutes_arrival"] = stop.get("delay_minutes_arrival", 0)
+
+            if stop.get("departure_time") and not existing_stop.get("departure_time"):
+                existing_stop["departure_time"] = stop["departure_time"]
+                existing_stop["delay_minutes_departure"] = stop.get("delay_minutes_departure", 0)
+
+            # Stacja nie jest odwołana, jeśli choć jedno jej wystąpienie nie było odwołane
+            existing_stop["is_cancelled"] = existing_stop["is_cancelled"] and stop["is_cancelled"]
+
+            # Scalanie informacji o utrudnieniach
+            for idx in range(len(existing_stop["difficulties_info"])):
+                if idx < len(stop["difficulties_info"]):
+                    if stop["difficulties_info"][idx] and not existing_stop["difficulties_info"][idx]:
+                        existing_stop["difficulties_info"][idx] = stop["difficulties_info"][idx]
+
+            # Scalanie odległości i czasu przejazdu do następnej stacji
+            if stop.get("distance_km_from_start_to_next") is not None and existing_stop.get("distance_km_from_start_to_next") is None:
+                existing_stop["distance_km_from_start_to_next"] = stop["distance_km_from_start_to_next"]
+            if stop.get("travel_time_from_start_to_next") is not None and existing_stop.get("travel_time_from_start_to_next") is None:
+                existing_stop["travel_time_from_start_to_next"] = stop["travel_time_from_start_to_next"]
+
+    logger.info(f"Pomyślnie pobrano dane dla {len(merged_route_details)} stacji dla pociągu {train_number} (po scaleniu {len(route_details)} -> {len(merged_route_details)}).")
+
+    return merged_route_details
 
 
 def process_single_train(page: Page, train: dict, logger: logging.Logger, target_date: str = None):
