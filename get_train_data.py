@@ -63,7 +63,7 @@ def fetch_page_data(page, url, page_num, logger, max_retries=3):
 
             table_selector = "table.table"
             logger.debug(f"Oczekiwanie na selektor: '{table_selector}'")
-            table = page.wait_for_selector(table_selector, timeout=1500)
+            table = page.wait_for_selector(table_selector, timeout=10000)
 
             rows = table.query_selector_all("tr")[1:]  # Pomijamy nagłówek
 
