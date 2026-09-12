@@ -52,6 +52,23 @@ def parse_difficulties(difficulties_text: str) -> tuple:
     return parts[1].strip(), parts[2].strip() if len(parts) > 1 else None
 
 
+def extract_train_numbers(number_str: str) -> list:
+    """Wyciąga numery pociągów z tekstu (np. 'IC 1116', '1116/7', 'IC 1116 / 1117', 'TLK 53100')."""
+    if not number_str:
+        return []
+
+    # Obsługa zapisu relacji z ukośnikiem, np. 1116/7 lub 53100/1
+    slash_match = re.search(r'(\d+)\s*/\s*(\d+)', str(number_str))
+    if slash_match:
+        n1, n2 = slash_match.group(1), slash_match.group(2)
+        if len(n2) < len(n1):
+            n2_full = n1[:-len(n2)] + n2
+            return [int(n1), int(n2_full)]
+        return [int(n1), int(n2)]
+
+    return [int(n) for n in re.findall(r'\d+', str(number_str))]
+
+
 def get_train_details(page: Page, train_number: str, logger: logging.Logger, target_date: str = None):
     """Pobiera szczegółowe dane o trasie pociągu."""
     if target_date:
@@ -59,10 +76,14 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
     else:
         logger.info(f"Pobieranie danych dla pociągu nr: {train_number}")
 
+    train_number_str = str(train_number).strip()
+    search_digits = re.search(r'\d+', train_number_str)
+    search_query = search_digits.group(0) if search_digits else train_number_str
+
     input_field = page.locator("#ftnu-number")
     input_field.click()
     input_field.clear()
-    input_field.press_sequentially(train_number, delay=100)
+    input_field.press_sequentially(search_query, delay=100)
 
     # Wypełnianie kalendarza jeśli podano target_date
     if target_date:
@@ -124,7 +145,21 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
                     found_numbers_str = [numbers_container.inner_text().strip()]
 
                 try:
-                    is_number_match = any(abs(int(num) - int(train_number)) <= 1 for num in found_numbers_str)
+                    row_numbers = []
+                    for s in found_numbers_str:
+                        row_numbers.extend(extract_train_numbers(s))
+
+                    target_numbers = extract_train_numbers(train_number)
+
+                    if not row_numbers or not target_numbers:
+                        logger.warning(f"W wierszu znaleziono nieprawidłowy format numeru pociągu: {found_numbers_str}")
+                        continue
+
+                    is_number_match = any(
+                        abs(r_num - t_num) <= 1
+                        for r_num in row_numbers
+                        for t_num in target_numbers
+                    )
                     if is_number_match:
                         logger.debug(f"Znaleziono pasujący pociąg IC w wierszu nr {i + 1}.")
                         target_row = row
