@@ -2,6 +2,7 @@ import re
 import time
 import logging
 import os
+from collections import deque
 from playwright.sync_api import sync_playwright, TimeoutError, Page
 try:
     from playwright_stealth import stealth_sync
@@ -13,6 +14,109 @@ except ImportError:
         Stealth().apply_stealth_sync(page)
 
 URL = "https://portalpasazera.pl/Wyszukiwarka/Index"
+
+MONITORED_URL_FRAGMENTS = (
+    "WyszukajNumerPociagu",
+    "ZnajdzPociagNumer",
+    "/challenge/",
+    "/Wyszukiwarka/Index",
+)
+RETRYABLE_STATUSES = (
+    "page_load_timeout",
+    "parsing_error",
+    "not_found",
+    "scraping_timeout",
+    "unknown_error",
+    "autocomplete_error",
+)
+INVALID_NUMBER_STATUSES = ("invalid_train_number", "autocomplete_error")
+MAX_CONSECUTIVE_INVALID_NUMBERS = 15
+
+
+class NetworkTracker:
+    """Rejestruje wybrane zdarzenia sieciowe Playwright na potrzeby diagnostyki błędów."""
+
+    def __init__(self, maxlen: int = 30):
+        self.events: deque[dict] = deque(maxlen=maxlen)
+
+    def clear(self) -> None:
+        self.events.clear()
+
+    @staticmethod
+    def _is_monitored(url: str) -> bool:
+        return "portalpasazera.pl" in url and any(frag in url for frag in MONITORED_URL_FRAGMENTS)
+
+    @staticmethod
+    def _short_path(url: str) -> str:
+        path = re.sub(r"^https?://[^/]+", "", url)
+        return path[:120] + ("..." if len(path) > 120 else "")
+
+    def on_response(self, response) -> None:
+        url = response.url
+        if not self._is_monitored(url):
+            return
+
+        headers = response.headers or {}
+        body_empty = None
+        if "WyszukajNumerPociagu" in url and response.status == 200:
+            try:
+                body_empty = response.text().strip() == "[]"
+            except Exception:
+                body_empty = None
+
+        self.events.append({
+            "method": response.request.method,
+            "path": self._short_path(url),
+            "status": response.status,
+            "challenge": headers.get("x-require-challenge"),
+            "body_empty": body_empty,
+            "error": None,
+        })
+
+    def on_request_failed(self, request) -> None:
+        url = request.url
+        if not self._is_monitored(url):
+            return
+
+        self.events.append({
+            "method": request.method,
+            "path": self._short_path(url),
+            "status": "FAILED",
+            "challenge": None,
+            "body_empty": None,
+            "error": request.failure,
+        })
+
+    def has_autocomplete_failure(self) -> bool:
+        """Zwraca True, jeśli endpoint autouzupełniania nie zadziałał (błąd HTTP, błąd sieci lub brak odpowiedzi)."""
+        ac_events = [e for e in self.events if "WyszukajNumerPociagu" in e["path"]]
+        if not ac_events:
+            return True
+
+        # Synchroniczne GetTrainNumberValue wysyła zapytanie bez parametrów filter[...], sprawdzamy też ostatnie wywołanie
+        exact_events = [e for e in ac_events if "filter[" not in e["path"] and "filter%5B" not in e["path"]]
+        relevant = exact_events[-1:] if exact_events else ac_events[-1:]
+        last = relevant[0]
+        return last["status"] == "FAILED" or (isinstance(last["status"], int) and last["status"] >= 400)
+
+    def format_summary(self, limit: int = 8) -> str:
+        if not self.events:
+            return "brak zarejestrowanych zapytań"
+
+        parts = []
+        for ev in list(self.events)[-limit:]:
+            desc = f"{ev['method']} {ev['path']} -> {ev['status']}"
+            flags = []
+            if ev.get("challenge"):
+                flags.append(f"challenge={ev['challenge']}")
+            if ev.get("body_empty") is True:
+                flags.append("empty=[]")
+            if ev.get("error"):
+                flags.append(f"err={ev['error']}")
+            if flags:
+                desc += f" ({', '.join(flags)})"
+            parts.append(desc)
+        return "; ".join(parts)
 
 
 def parse_delay(delay_text: str) -> int:
@@ -69,7 +173,7 @@ def extract_train_numbers(number_str: str) -> list:
     return [int(n) for n in re.findall(r'\d+', str(number_str))]
 
 
-def get_train_details(page: Page, train_number: str, logger: logging.Logger, target_date: str = None):
+def get_train_details(page: Page, train_number: str, logger: logging.Logger, target_date: str = None, network_tracker: NetworkTracker = None):
     """Pobiera szczegółowe dane o trasie pociągu."""
     if target_date:
         logger.info(f"Pobieranie danych dla pociągu nr: {train_number} z datą: {target_date}")
@@ -107,7 +211,8 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
             timeout=15000
         )
     except TimeoutError:
-        logger.warning(f"Strona nie załadowała wyników ani komunikatu o błędzie dla pociągu {train_number}.")
+        net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
+        logger.warning(f"Strona nie załadowała wyników ani komunikatu o błędzie dla pociągu {train_number}.{net_info}")
         return "page_load_timeout"
 
     no_train_msg = page.locator("h3:has-text('dobie brak kursujących pociągów'), h3:has-text('brak kursujących pociągów')").first
@@ -118,8 +223,11 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
 
     invalid_nr_msg = page.locator("div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')")
     if invalid_nr_msg.is_visible():
-        logger.warning(f"Dla numeru {train_number} znaleziono błąd: 'Wpisany numer pociągu jest nieprawidłowy'")
-        return "N/A"
+        net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
+        logger.warning(f"Dla numeru {train_number} znaleziono błąd: 'Wpisany numer pociągu jest nieprawidłowy'.{net_info}")
+        if network_tracker is not None and network_tracker.has_autocomplete_failure():
+            return "autocomplete_error"
+        return "invalid_train_number"
 
     try:
         row_count = page.locator("div.catalog-table__row").count()
@@ -292,7 +400,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
     return merged_route_details
 
 
-def process_single_train(page: Page, train: dict, logger: logging.Logger, target_date: str = None):
+def process_single_train(page: Page, train: dict, logger: logging.Logger, target_date: str = None, network_tracker: NetworkTracker = None):
     """Pobiera i parsuje dane dla pojedynczego pociągu."""
     train_number = train.get("number")
     if not train_number:
@@ -301,6 +409,8 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger, target
 
     max_retries = 3
     for attempt in range(1, max_retries + 1):
+        if network_tracker is not None:
+            network_tracker.clear()
         try:
             page.goto(URL, timeout=30000, wait_until='domcontentloaded')
     
@@ -308,7 +418,10 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger, target
             page.locator("span.find-train-selector").click()
             page.locator("li:has-text('po numerze')").click()
     
-            details = get_train_details(page, train_number, logger, target_date)
+            if network_tracker is not None:
+                details = get_train_details(page, train_number, logger, target_date, network_tracker=network_tracker)
+            else:
+                details = get_train_details(page, train_number, logger, target_date)
             train["delay_info"] = details
             if isinstance(details, list) and details:
                 is_run_cancelled = all(stop.get("is_cancelled", False) for stop in details)
@@ -316,8 +429,8 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger, target
             else:
                 train["is_cancelled"] = False
             
-            # Przerywamy pętlę retries jeśli udało się pobrać dane lub dostaliśmy znany stan w którym retry nie pomoże ("N/A")
-            if details not in ["page_load_timeout", "parsing_error", "not_found", "scraping_timeout", "unknown_error"]:
+            # Przerywamy pętlę retries jeśli udało się pobrać dane lub dostaliśmy stan w którym retry nie pomoże
+            if not (isinstance(details, str) and details in RETRYABLE_STATUSES):
                 break
                 
             if attempt < max_retries:
@@ -327,22 +440,24 @@ def process_single_train(page: Page, train: dict, logger: logging.Logger, target
                 logger.warning(f"Nie udało się pobrać danych dla pociągu {train_number} po {max_retries} próbach.")
 
         except TimeoutError as e:
+            net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
             if attempt < max_retries:
-                logger.error(f"Timeout podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}")
+                logger.error(f"Timeout podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}.{net_info}")
                 time.sleep(2)
             else:
-                logger.error(f"Timeout podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}")
+                logger.error(f"Timeout podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}.{net_info}")
                 train["delay_info"] = "scraping_timeout"
         except Exception as e:
+            net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
             if attempt < max_retries:
-                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}")
+                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number} (próba {attempt}/{max_retries}). Ponawiam. Błąd: {e}.{net_info}")
                 time.sleep(2)
             else:
-                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}", exc_info=True)
+                logger.error(f"Nieoczekiwany błąd podczas przetwarzania pociągu {train_number}. Osiągnięto limit prób. Błąd: {e}.{net_info}", exc_info=True)
                 train["delay_info"] = "unknown_error"
 
 
-def get_delays(trains_data: list = None, logger=None) -> list:
+def get_delays(trains_data: list = None, logger=None, max_consecutive_invalid_numbers: int = MAX_CONSECUTIVE_INVALID_NUMBERS) -> list:
     if logger is None:
         logger = logging.getLogger(__name__)
 
@@ -390,6 +505,9 @@ def get_delays(trains_data: list = None, logger=None) -> list:
                     route.continue_()
 
             page.route("**/*", block_unnecessary_resources)
+            network_tracker = NetworkTracker()
+            page.on("response", network_tracker.on_response)
+            page.on("requestfailed", network_tracker.on_request_failed)
             apply_stealth(page)
             logger.info("Pomyślnie uruchomiono przeglądarkę Playwright z filtrowaniem zasobów.")
         except Exception as e:
@@ -398,20 +516,39 @@ def get_delays(trains_data: list = None, logger=None) -> list:
                 train["delay_info"] = "playwright_connection_error"
             return trains_data
 
-        page.goto(URL, timeout=30000)
         try:
-            # Kliknięcie cookies na początku
-            cookie_button = page.locator("button:has-text('Akceptuj wszystkie'), button:has-text('Akceptuj'), button:has-text('Zgoda')").first
-            cookie_button.click(timeout=5000)
-            logger.info("Zaakceptowano cookies.")
-        except TimeoutError:
-            logger.warning("Banner cookies nie pojawił się lub nie można było go kliknąć.")
+            network_tracker.clear()
+            page.goto(URL, timeout=30000)
+            try:
+                # Kliknięcie cookies na początku
+                cookie_button = page.locator("button:has-text('Akceptuj wszystkie'), button:has-text('Akceptuj'), button:has-text('Zgoda')").first
+                cookie_button.click(timeout=5000)
+                logger.info("Zaakceptowano cookies.")
+            except TimeoutError:
+                logger.warning(
+                    f"Banner cookies nie pojawił się lub nie można było go kliknąć. Sieć: {network_tracker.format_summary()}"
+                )
 
-        for train in trains_data:
-            target_date = train.get("target_date")
-            process_single_train(page, train, logger, target_date=target_date)
+            consecutive_invalid_numbers = 0
+            for train in trains_data:
+                target_date = train.get("target_date")
+                process_single_train(page, train, logger, target_date=target_date, network_tracker=network_tracker)
 
-        browser.close()
-        logger.info("Zakończono działanie przeglądarki Playwright.")
+                status = train.get("delay_info")
+                if isinstance(status, str) and status in INVALID_NUMBER_STATUSES:
+                    consecutive_invalid_numbers += 1
+                    if consecutive_invalid_numbers >= max_consecutive_invalid_numbers:
+                        msg = (
+                            f"Przerwano scrapowanie: wykryto {consecutive_invalid_numbers} kolejnych błędów "
+                            f"'Wpisany numer pociągu jest nieprawidłowy' / błędów wyszukiwarki. "
+                            f"Ostatnia sieć: {network_tracker.format_summary()}"
+                        )
+                        logger.critical(msg)
+                        raise RuntimeError(msg)
+                elif isinstance(status, list) or status == "N/A":
+                    consecutive_invalid_numbers = 0
+        finally:
+            browser.close()
+            logger.info("Zakończono działanie przeglądarki Playwright.")
 
     return trains_data
