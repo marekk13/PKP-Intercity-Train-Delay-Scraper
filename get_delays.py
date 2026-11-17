@@ -43,17 +43,21 @@ class NetworkTracker:
         self.events.clear()
 
     @staticmethod
-    def _is_monitored(url: str) -> bool:
-        return "portalpasazera.pl" in url and any(frag in url for frag in MONITORED_URL_FRAGMENTS)
+    def _is_monitored(url: str, resource_type: str | None = None) -> bool:
+        if resource_type == "document":
+            return True
+        url_lower = url.lower()
+        return "portalpasazera.pl" in url_lower and any(frag.lower() in url_lower for frag in MONITORED_URL_FRAGMENTS)
 
     @staticmethod
     def _short_path(url: str) -> str:
-        path = re.sub(r"^https?://[^/]+", "", url)
+        path = re.sub(r"^https?://(?:www\.)?portalpasazera\.pl", "", url, flags=re.IGNORECASE)
         return path[:120] + ("..." if len(path) > 120 else "")
 
     def on_response(self, response) -> None:
         url = response.url
-        if not self._is_monitored(url):
+        req = response.request
+        if not self._is_monitored(url, getattr(req, "resource_type", None)):
             return
 
         headers = response.headers or {}
@@ -65,9 +69,10 @@ class NetworkTracker:
                 body_empty = None
 
         self.events.append({
-            "method": response.request.method,
+            "method": req.method,
             "path": self._short_path(url),
             "status": response.status,
+            "location": headers.get("location"),
             "challenge": headers.get("x-require-challenge"),
             "body_empty": body_empty,
             "error": None,
@@ -75,20 +80,21 @@ class NetworkTracker:
 
     def on_request_failed(self, request) -> None:
         url = request.url
-        if not self._is_monitored(url):
+        if not self._is_monitored(url, getattr(request, "resource_type", None)):
             return
 
         self.events.append({
             "method": request.method,
             "path": self._short_path(url),
             "status": "FAILED",
+            "location": None,
             "challenge": None,
             "body_empty": None,
             "error": request.failure,
         })
 
     def has_autocomplete_failure(self) -> bool:
-        """Zwraca True, jeśli endpoint autouzupełniania nie zadziałał (błąd HTTP, błąd sieci lub brak odpowiedzi)."""
+        """Zwraca True, jeśli endpoint autouzupełniania nie zadziałał (błąd/przekierowanie HTTP, błąd sieci lub brak odpowiedzi)."""
         ac_events = [e for e in self.events if "WyszukajNumerPociagu" in e["path"]]
         if not ac_events:
             return True
@@ -97,7 +103,7 @@ class NetworkTracker:
         exact_events = [e for e in ac_events if "filter[" not in e["path"] and "filter%5B" not in e["path"]]
         relevant = exact_events[-1:] if exact_events else ac_events[-1:]
         last = relevant[0]
-        return last["status"] == "FAILED" or (isinstance(last["status"], int) and last["status"] >= 400)
+        return last["status"] == "FAILED" or (isinstance(last["status"], int) and last["status"] >= 300)
 
     def format_summary(self, limit: int = 8) -> str:
         if not self.events:
@@ -107,6 +113,8 @@ class NetworkTracker:
         for ev in list(self.events)[-limit:]:
             desc = f"{ev['method']} {ev['path']} -> {ev['status']}"
             flags = []
+            if ev.get("location"):
+                flags.append(f"loc={ev['location']}")
             if ev.get("challenge"):
                 flags.append(f"challenge={ev['challenge']}")
             if ev.get("body_empty") is True:
@@ -211,7 +219,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
             timeout=15000
         )
     except TimeoutError:
-        net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
+        net_info = f" URL={page.url} | Sieć: {network_tracker.format_summary()}" if network_tracker else ""
         logger.warning(f"Strona nie załadowała wyników ani komunikatu o błędzie dla pociągu {train_number}.{net_info}")
         return "page_load_timeout"
 
@@ -223,7 +231,7 @@ def get_train_details(page: Page, train_number: str, logger: logging.Logger, tar
 
     invalid_nr_msg = page.locator("div.param-error:has-text('Wpisany numer pociągu jest nieprawidłowy')")
     if invalid_nr_msg.is_visible():
-        net_info = f" Sieć: {network_tracker.format_summary()}" if network_tracker else ""
+        net_info = f" URL={page.url} | Sieć: {network_tracker.format_summary()}" if network_tracker else ""
         logger.warning(f"Dla numeru {train_number} znaleziono błąd: 'Wpisany numer pociągu jest nieprawidłowy'.{net_info}")
         if network_tracker is not None and network_tracker.has_autocomplete_failure():
             return "autocomplete_error"
@@ -526,7 +534,7 @@ def get_delays(trains_data: list = None, logger=None, max_consecutive_invalid_nu
                 logger.info("Zaakceptowano cookies.")
             except TimeoutError:
                 logger.warning(
-                    f"Banner cookies nie pojawił się lub nie można było go kliknąć. Sieć: {network_tracker.format_summary()}"
+                    f"Banner cookies nie pojawił się lub nie można było go kliknąć. URL={page.url} | Sieć: {network_tracker.format_summary()}"
                 )
 
             consecutive_invalid_numbers = 0
